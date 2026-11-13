@@ -1,0 +1,3 @@
+<h2>Reseller Dashboard - PesoTrack</h2>
+<p>Welcome, Reseller {{ request.user.username }}! Business: {{ request.user.business_name }}</p>
+<a href="{% url 'profile' %}">Edit Profile</a> | <a href="{% url 'logout' %}">Log Out</a>

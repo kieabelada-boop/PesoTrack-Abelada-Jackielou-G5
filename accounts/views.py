@@ -40,9 +40,12 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
 
 @login_required
 def admin_dashboard(request):
+    if request.user.role != CustomUser.Role.ADMIN:
+        return redirect('reseller_dashboard') 
     return render(request, 'accounts/admin_dashboard.html')
-
 
 @login_required
 def reseller_dashboard(request):
+    if request.user.role != CustomUser.Role.RESELLER:
+        return redirect('admin_dashboard')  
     return render(request, 'accounts/reseller_dashboard.html')

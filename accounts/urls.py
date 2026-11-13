@@ -1,5 +1,11 @@
 from django.urls import path
-from .views import PesoTrackLoginView, SignUpView, ProfileUpdateView, admin_dashboard, reseller_dashboard
+from .views import (
+    PesoTrackLoginView, 
+    SignUpView, 
+    ProfileUpdateView, 
+    admin_dashboard, 
+    reseller_dashboard
+)
 
 urlpatterns = [
     path('login/', PesoTrackLoginView.as_view(), name='login'),
