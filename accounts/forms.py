@@ -13,8 +13,7 @@ class CustomUserCreationForm(UserCreationForm):
 
     class Meta(UserCreationForm.Meta):
         model = CustomUser
-        fields = ("username", "email", "first_name",
-            "last_name", "course")
+        fields = ("username", "email", "first_name", "last_name", "contact_number", "business_name", "role")
 
 class ProfileForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
@@ -23,9 +22,9 @@ class ProfileForm(forms.ModelForm):
 
     class Meta:
         model = CustomUser
-        fields = ("username", "email", "first_name", "last_name", "course")
+        fields = ("username", "email", "first_name", "last_name", "contact_number", "business_name", "role")
 
-class CampusAuthenticationForm(AuthenticationForm):
+class PesoTrackAuthenticationForm(AuthenticationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         add_bootstrap_classes(self)

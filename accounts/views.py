@@ -3,13 +3,14 @@ from django.contrib.auth.views import LoginView
 from django.contrib.messages.views import SuccessMessageMixin
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, UpdateView
-from .forms import (CampusAuthenticationForm, CustomUserCreationForm,
+from .forms import (CustomUserCreationForm, PesoTrackAuthenticationForm,
                     ProfileForm)
 from .models import CustomUser
 
 
-class CampusLoginView(LoginView):
-    authentication_form = CampusAuthenticationForm
+class PesoTrackLoginView(LoginView):
+    authentication_form = PesoTrackAuthenticationForm
+    template_name = "registration/login.html"  # Make sure your template path matches your project
 
 
 class SignUpView(SuccessMessageMixin, CreateView):
