@@ -1,6 +1,8 @@
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView
 from django.contrib.messages.views import SuccessMessageMixin
+from django.shortcuts import render
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, UpdateView
 from .forms import (CustomUserCreationForm, PesoTrackAuthenticationForm,
@@ -10,7 +12,13 @@ from .models import CustomUser
 
 class PesoTrackLoginView(LoginView):
     authentication_form = PesoTrackAuthenticationForm
-    template_name = "registration/login.html"  # Make sure your template path matches your project
+    template_name = "registration/login.html"
+
+    def get_success_url(self):
+        user = self.request.user
+        if user.is_authenticated and user.role == 'ADMIN':
+            return reverse_lazy('admin_dashboard')
+        return reverse_lazy('reseller_dashboard')
 
 
 class SignUpView(SuccessMessageMixin, CreateView):
@@ -28,3 +36,13 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_object(self, queryset=None):
         return self.request.user
+
+
+@login_required
+def admin_dashboard(request):
+    return render(request, 'accounts/admin_dashboard.html')
+
+
+@login_required
+def reseller_dashboard(request):
+    return render(request, 'accounts/reseller_dashboard.html')
