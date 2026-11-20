@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - PesoTrack Retail Monitoring{% endblock %}
+
+{% block content %}
+<!-- Dashboard Header -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+    <div>
+        <h1 class="h2 mb-1 fw-bold text-dark">
+            <i class="bi bi-shop me-2 text-primary"></i>{{ user.business_name|default:user.username }}'s Dashboard
+        </h1>
+        <p class="text-muted mb-0">Retail Price &amp; Profit Margin Monitoring Overview</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-teal-light fw-semibold" href="{% url 'compare_suppliers' %}">
+            <i class="bi bi-shop me-1"></i>Compare Stores
+        </a>
+        <a class="btn btn-teal" href="{% url 'product_create' %}">
+            <i class="bi bi-plus-lg me-1"></i>Add Product
+        </a>
+        <a class="btn btn-outline-secondary" href="{% url 'price_record_create' %}">
+            <i class="bi bi-graph-up-arrow me-1"></i>Record Cost
+        </a>
+    </div>
+</div>
+
+<!-- KPI Metric Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="card card-stat shadow-sm border-0 border-start border-primary border-4 h-100">
+            <div class="card-body">
+                <span class="text-muted small text-uppercase fw-semibold">Tracked Products</span>
+                <h2 class="display-6 fw-bold text-dark mb-0 mt-1">{{ total_products }}</h2>
+                <div class="small text-muted mt-2">Active store catalog</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card card-stat shadow-sm border-0 border-start border-success border-4 h-100">
+            <div class="card-body">
+                <span class="text-muted small text-uppercase fw-semibold">Average Margin</span>
+                <h2 class="display-6 fw-bold {% if avg_margin < 15 %}text-warning{% else %}text-success{% endif %} mb-0 mt-1">{{ avg_margin }}%</h2>
+                <div class="small text-muted mt-2">Across all active items</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card card-stat shadow-sm border-0 border-start border-warning border-4 h-100">
+            <div class="card-body">
+                <span class="text-muted small text-uppercase fw-semibold">Low Margin Alerts</span>
+                <h2 class="display-6 fw-bold {% if low_margin_count > 0 %}text-warning{% else %}text-muted{% endif %} mb-0 mt-1">{{ low_margin_count }}</h2>
+                <div class="small text-muted mt-2">Below defined threshold</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card card-stat shadow-sm border-0 border-start border-danger border-4 h-100">
+            <div class="card-body">
+                <span class="text-muted small text-uppercase fw-semibold">Critical Losses</span>
+                <h2 class="display-6 fw-bold {% if loss_count > 0 %}text-danger{% else %}text-muted{% endif %} mb-0 mt-1">{{ loss_count }}</h2>
+                <div class="small text-muted mt-2">Selling at negative margin</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Automated Profit-Margin Alerts Section -->
+{% if low_margin_alerts %}
+<div class="card shadow-sm border-warning mb-4">
+    <div class="card-header bg-warning bg-opacity-25 d-flex justify-content-between align-items-center py-3">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-exclamation-triangle-fill text-warning fs-4"></i>
+            <div>
+                <h5 class="mb-0 fw-bold text-dark">Automated Profit Margin Alerts</h5>
+                <small class="text-dark">The following {{ low_margin_alerts|length }} product(s) have profit margins below your threshold due to recent purchasing price shifts.</small>
+            </div>
+        </div>
+        <a class="btn btn-sm btn-outline-dark" href="{% url 'product_list' %}?status=alerts">Filter in Catalog</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Product</th>
+                    <th>Supplier Cost</th>
+                    <th>Retail Price</th>
+                    <th>Unit Profit</th>
+                    <th>Current Margin</th>
+                    <th>Threshold</th>
+                    <th>Suggested Retail Price</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in low_margin_alerts %}
+                <tr class="{% if item.is_loss %}table-danger{% else %}table-warning{% endif %}">
+                    <td>
+                        <a href="{% url 'product_detail' item.id %}" class="fw-bold text-dark text-decoration-none">
+                            {{ item.name }}
+                        </a>
+                        <div class="small text-muted">{{ item.get_category_display }} &bull; Per {{ item.unit }}</div>
+                    </td>
+                    <td><strong class="text-dark">₱{{ item.current_purchase_price|floatformat:2 }}</strong></td>
+                    <td>₱{{ item.selling_price|floatformat:2 }}</td>
+                    <td>
+                        {% if item.unit_profit < 0 %}
+                            <span class="badge bg-danger">Loss: -₱{{ item.unit_profit|stringformat:".2f"|slice:"1:" }}</span>
+                        {% else %}
+                            ₱{{ item.unit_profit|floatformat:2 }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.is_loss %}
+                            <span class="badge bg-danger">{{ item.profit_margin_percentage }}%</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">{{ item.profit_margin_percentage }}%</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.margin_threshold }}%</td>
+                    <td>
+                        <strong class="text-primary fs-6">₱{{ item.suggested_selling_price|floatformat:2 }}</strong>
+                        <div class="small text-muted">To achieve {{ item.margin_threshold }}% margin</div>
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            <form method="post" action="{% url 'apply_suggested_price' item.id %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-success btn-sm" title="Apply recommended price of ₱{{ item.suggested_selling_price|floatformat:2 }}">
+                                    <i class="bi bi-check2-circle me-1"></i>Apply ₱{{ item.suggested_selling_price|floatformat:2 }}
+                                </button>
+                            </form>
+                            <a href="{% url 'product_update' item.id %}" class="btn btn-outline-secondary btn-sm" title="Edit manually">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'product_price_record_create' item.id %}" class="btn btn-outline-primary btn-sm" title="Record new cost">
+                                <i class="bi bi-plus-lg"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-success d-flex align-items-center gap-3 shadow-sm mb-4" role="alert">
+    <i class="bi bi-shield-check fs-2 text-success"></i>
+    <div>
+        <h5 class="alert-heading mb-1 fw-bold">All Profit Margins are Healthy!</h5>
+        <p class="mb-0 small">None of your tracked products are currently below their target profit margin thresholds.</p>
+    </div>
+</div>
+{% endif %}
+
+<!-- Recent Price Shifts & Cost Trend Table -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold text-dark">
+            <i class="bi bi-graph-up me-2 text-primary"></i>Recent Purchasing Price Shifts
+        </h5>
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'price_history' %}">
+            View Complete Price History <i class="bi bi-arrow-right ms-1"></i>
+        </a>
+    </div>
+    {% if recent_price_shifts %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Effective Date</th>
+                    <th>Product</th>
+                    <th>Supplier / Wholesaler</th>
+                    <th>Purchasing Cost</th>
+                    <th>Cost Shift</th>
+                    <th>Selling Price</th>
+                    <th>Margin at Time</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in recent_price_shifts %}
+                <tr>
+                    <td>{{ record.effective_date|date:"M d, Y" }}</td>
+                    <td>
+                        <a href="{% url 'product_detail' record.product.id %}" class="fw-semibold text-dark text-decoration-none">
+                            {{ record.product.name }}
+                        </a>
+                        <div class="small text-muted">{{ record.product.get_category_display }}</div>
+                    </td>
+                    <td>{{ record.supplier|default:"-" }}</td>
+                    <td><strong>₱{{ record.purchase_price|floatformat:2 }}</strong></td>
+                    <td>
+                        {% if record.previous_record %}
+                            {% if record.price_difference > 0 %}
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-arrow-up-right me-1"></i>+₱{{ record.price_difference|floatformat:2 }} (+{{ record.percentage_change }}%)
+                                </span>
+                            {% elif record.price_difference < 0 %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-arrow-down-right me-1"></i>-₱{{ record.price_difference|stringformat:".2f"|slice:"1:" }} ({{ record.percentage_change }}%)
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">No change</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge bg-info text-dark">Initial Baseline</span>
+                        {% endif %}
+                    </td>
+                    <td>₱{{ record.product.selling_price|floatformat:2 }}</td>
+                    <td>
+                        {% if record.profit_margin_at_recording < 0 %}
+                            <span class="badge bg-danger">{{ record.profit_margin_at_recording }}%</span>
+                        {% elif record.profit_margin_at_recording < record.product.margin_threshold %}
+                            <span class="badge bg-warning text-dark">{{ record.profit_margin_at_recording }}%</span>
+                        {% else %}
+                            <span class="badge bg-success">{{ record.profit_margin_at_recording }}%</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'product_detail' record.product.id %}" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-eye"></i> Details
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-5">
+        <i class="bi bi-journal-text fs-1 text-muted"></i>
+        <h5 class="mt-3">No Price Shifts Recorded Yet</h5>
+        <p class="text-muted">Start tracking supplier price increases by adding products and logging restock costs.</p>
+        <a href="{% url 'product_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>Add First Product
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

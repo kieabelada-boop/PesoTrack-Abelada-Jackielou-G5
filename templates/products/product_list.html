@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Products & Margins - PesoTrack{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+    <div>
+        <h1 class="h2 mb-1 fw-bold text-dark">
+            <i class="bi bi-boxes me-2 text-primary"></i>Product Catalog &amp; Profit Margins
+        </h1>
+        <p class="text-muted mb-0">Monitor purchasing costs, retail prices, and profit margin shifts</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-teal-light fw-semibold" href="{% url 'compare_suppliers' %}">
+            <i class="bi bi-shop me-1"></i>Compare Stores
+        </a>
+        <a class="btn btn-teal" href="{% url 'product_create' %}">
+            <i class="bi bi-plus-lg me-1"></i>Add Product
+        </a>
+        <a class="btn btn-outline-secondary" href="{% url 'price_record_create' %}">
+            <i class="bi bi-graph-up-arrow me-1"></i>Record Cost
+        </a>
+    </div>
+</div>
+
+<!-- KPI Mini Summary -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <a href="?status=all{% if selected_category %}&category={{ selected_category }}{% endif %}" class="text-decoration-none">
+            <div class="card card-stat shadow-sm border-0 border-start border-primary border-4 {% if selected_status == 'all' %}bg-primary bg-opacity-10{% endif %}">
+                <div class="card-body py-3">
+                    <span class="text-muted small text-uppercase fw-semibold">Total Items</span>
+                    <h3 class="fw-bold text-dark mb-0">{{ total_products }}</h3>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="?status=healthy{% if selected_category %}&category={{ selected_category }}{% endif %}" class="text-decoration-none">
+            <div class="card card-stat shadow-sm border-0 border-start border-success border-4 {% if selected_status == 'healthy' %}bg-success bg-opacity-10{% endif %}">
+                <div class="card-body py-3">
+                    <span class="text-muted small text-uppercase fw-semibold">Healthy Margins</span>
+                    <h3 class="fw-bold text-success mb-0">{{ healthy_count }}</h3>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="?status=alerts{% if selected_category %}&category={{ selected_category }}{% endif %}" class="text-decoration-none">
+            <div class="card card-stat shadow-sm border-0 border-start border-warning border-4 {% if selected_status == 'alerts' %}bg-warning bg-opacity-10{% endif %}">
+                <div class="card-body py-3">
+                    <span class="text-muted small text-uppercase fw-semibold">Low Margin Alerts</span>
+                    <h3 class="fw-bold text-warning mb-0">{{ low_margin_count }}</h3>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="?status=losses{% if selected_category %}&category={{ selected_category }}{% endif %}" class="text-decoration-none">
+            <div class="card card-stat shadow-sm border-0 border-start border-danger border-4 {% if selected_status == 'losses' %}bg-danger bg-opacity-10{% endif %}">
+                <div class="card-body py-3">
+                    <span class="text-muted small text-uppercase fw-semibold">Critical Losses</span>
+                    <h3 class="fw-bold text-danger mb-0">{{ loss_count }}</h3>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Search and Filter Bar -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-center">
+            {% if selected_status %}
+                <input type="hidden" name="status" value="{{ selected_status }}">
+            {% endif %}
+            <div class="col-12 col-md-5">
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" class="form-control" placeholder="Search product name, SKU, or category..." value="{{ search_query }}">
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <select name="category" class="form-select">
+                    <option value="">All Categories</option>
+                    {% for code, label in categories %}
+                        <option value="{{ code }}" {% if selected_category == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-outline-primary flex-grow-1">Filter</button>
+                <a href="{% url 'product_list' %}" class="btn btn-outline-secondary">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Products Table -->
+<div class="card shadow-sm border-0">
+    {% if products %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Product &amp; Details</th>
+                    <th>Supplier Cost</th>
+                    <th>Retail Price</th>
+                    <th>Unit Profit</th>
+                    <th>Profit Margin</th>
+                    <th>Price Trend</th>
+                    <th>Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in products %}
+                <tr class="{% if p.is_loss %}table-danger bg-opacity-25{% elif p.is_low_margin %}table-warning bg-opacity-25{% endif %}">
+                    <td>
+                        <a href="{% url 'product_detail' p.id %}" class="fw-bold text-dark text-decoration-none fs-6">
+                            {{ p.name }}
+                        </a>
+                        <div class="small text-muted">
+                            <span class="badge bg-light text-dark border">{{ p.get_category_display }}</span>
+                            &bull; Per {{ p.unit }}
+                            {% if p.sku %}&bull; SKU: {{ p.sku }}{% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <strong>₱{{ p.current_purchase_price|floatformat:2 }}</strong>
+                    </td>
+                    <td>
+                        <strong class="text-primary">₱{{ p.selling_price|floatformat:2 }}</strong>
+                    </td>
+                    <td>
+                        {% if p.unit_profit < 0 %}
+                            <span class="text-danger fw-bold">-₱{{ p.unit_profit|stringformat:".2f"|slice:"1:" }}</span>
+                        {% else %}
+                            <span class="text-success fw-semibold">₱{{ p.unit_profit|floatformat:2 }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if p.is_loss %}
+                            <span class="badge bg-danger fs-6">{{ p.profit_margin_percentage }}%</span>
+                        {% elif p.is_low_margin %}
+                            <span class="badge bg-warning text-dark fs-6">{{ p.profit_margin_percentage }}%</span>
+                        {% else %}
+                            <span class="badge bg-success fs-6">{{ p.profit_margin_percentage }}%</span>
+                        {% endif %}
+                        <div class="small text-muted">Target: &ge;{{ p.margin_threshold }}%</div>
+                    </td>
+                    <td>
+                        {% if p.price_trend == 'up' %}
+                            <span class="badge bg-danger" title="Cost increased by ₱{{ p.price_change_amount|floatformat:2 }} (+{{ p.price_change_percentage }}%)">
+                                <i class="bi bi-arrow-up-right me-1"></i>+{{ p.price_change_percentage }}%
+                            </span>
+                        {% elif p.price_trend == 'down' %}
+                            <span class="badge bg-success" title="Cost decreased by ₱{{ p.price_change_amount|stringformat:".2f"|slice:"1:" }} ({{ p.price_change_percentage }}%)">
+                                <i class="bi bi-arrow-down-right me-1"></i>{{ p.price_change_percentage }}%
+                            </span>
+                        {% elif p.price_trend == 'same' %}
+                            <span class="badge bg-secondary">No change</span>
+                        {% else %}
+                            <span class="badge bg-light text-secondary border">Initial</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if p.is_loss %}
+                            <span class="badge bg-danger">🚨 Loss Alert</span>
+                        {% elif p.is_low_margin %}
+                            <span class="badge bg-warning text-dark">⚠️ Low Margin</span>
+                        {% else %}
+                            <span class="badge bg-success">✓ Healthy</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            <a href="{% url 'product_detail' p.id %}" class="btn btn-outline-primary" title="View details & price history">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="{% url 'product_price_record_create' p.id %}" class="btn btn-outline-warning text-dark" title="Record price shift">
+                                <i class="bi bi-graph-up-arrow"></i>
+                            </a>
+                            <a href="{% url 'product_update' p.id %}" class="btn btn-outline-secondary" title="Edit product">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'product_delete' p.id %}" class="btn btn-outline-danger" title="Delete product">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-5">
+        <i class="bi bi-inbox fs-1 text-muted"></i>
+        <h5 class="mt-3">No Products Found</h5>
+        <p class="text-muted">
+            {% if search_query or selected_category or selected_status %}
+                Try adjusting your search criteria or filters.
+            {% else %}
+                You have not added any products to monitor yet.
+            {% endif %}
+        </p>
+        <a href="{% url 'product_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>Add Your First Product
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
