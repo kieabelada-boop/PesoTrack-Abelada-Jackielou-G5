@@ -1,16 +1,116 @@
 {% extends "base.html" %}
 
+{% block title %}Sign Up - PesoTrack{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-12 col-md-8 col-lg-6">
-        <div class="card shadow-sm">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 border-bottom text-center">
+                <div class="badge bg-warning text-dark fs-4 px-3 py-2 mb-2">₱</div>
+                <h3 class="fw-bold text-dark mb-0">Create Your PesoTrack Account</h3>
+                <p class="text-muted small mb-0 mt-1">Start tracking purchasing price hikes and protecting your profit margins</p>
+            </div>
             <div class="card-body p-4">
-                <h1 class="h3 mb-4">Create your account</h1>
-                <form method="post">
+                <form method="post" novalidate>
                     {% csrf_token %}
-                    {{ form.as_p }}
-                    <button class="btn btn-primary" type="submit">Sign up</button>
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                <div><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Username <span class="text-danger">*</span></label>
+                            {{ form.username }}
+                            {% if form.username.errors %}
+                                <div class="text-danger small mt-1">{{ form.username.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Email Address <span class="text-danger">*</span></label>
+                            {{ form.email }}
+                            {% if form.email.errors %}
+                                <div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">First Name</label>
+                            {{ form.first_name }}
+                            {% if form.first_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.first_name.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Last Name</label>
+                            {{ form.last_name }}
+                            {% if form.last_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.last_name.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Store / Business Name</label>
+                            {{ form.business_name }}
+                            <div class="form-text small">{{ form.business_name.help_text }}</div>
+                            {% if form.business_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.business_name.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Contact Number</label>
+                            {{ form.contact_number }}
+                            {% if form.contact_number.errors %}
+                                <div class="text-danger small mt-1">{{ form.contact_number.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Account Role <span class="text-danger">*</span></label>
+                        {{ form.role }}
+                        <div class="form-text small">{{ form.role.help_text }}</div>
+                        {% if form.role.errors %}
+                            <div class="text-danger small mt-1">{{ form.role.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Password <span class="text-danger">*</span></label>
+                        {{ form.password1 }}
+                        <div class="form-text small">{{ form.password1.help_text }}</div>
+                        {% if form.password1.errors %}
+                            <div class="text-danger small mt-1">{{ form.password1.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Confirm Password <span class="text-danger">*</span></label>
+                        {{ form.password2 }}
+                        <div class="form-text small">{{ form.password2.help_text }}</div>
+                        {% if form.password2.errors %}
+                            <div class="text-danger small mt-1">{{ form.password2.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <button class="btn btn-primary w-100 py-2 fw-semibold" type="submit">
+                        <i class="bi bi-person-check me-1"></i>Create Account
+                    </button>
                 </form>
+                <div class="text-center mt-3 pt-3 border-top">
+                    <p class="text-muted small mb-0">
+                        Already have an account? <a href="{% url 'login' %}" class="fw-bold text-decoration-none">Log in here</a>
+                    </p>
+                </div>
             </div>
         </div>
     </div>

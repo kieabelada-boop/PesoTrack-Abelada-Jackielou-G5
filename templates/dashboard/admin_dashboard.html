@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}Administrator Dashboard - PesoTrack{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+    <div>
+        <h1 class="h2 mb-1 fw-bold text-dark">
+            <i class="bi bi-shield-check me-2 text-danger"></i>Administrator Dashboard
+        </h1>
+        <p class="text-muted mb-0">System Overview &amp; Store Reseller Account Monitoring</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-dark" href="/admin/" target="_blank">
+            <i class="bi bi-gear-fill me-1"></i>Django Admin Panel
+        </a>
+        <a class="btn btn-primary" href="{% url 'product_list' %}?view_all=true">
+            <i class="bi bi-box-seam me-1"></i>View System Catalog
+        </a>
+    </div>
+</div>
+
+<!-- System Metric Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="card card-stat shadow-sm border-0 border-start border-primary border-4 h-100">
+            <div class="card-body">
+                <span class="text-muted small text-uppercase fw-semibold">Active Resellers</span>
+                <h2 class="display-6 fw-bold text-dark mb-0 mt-1">{{ total_resellers }}</h2>
+                <div class="small text-muted mt-2">Registered sari-sari store owners</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card card-stat shadow-sm border-0 border-start border-success border-4 h-100">
+            <div class="card-body">
+                <span class="text-muted small text-uppercase fw-semibold">Products Tracked</span>
+                <h2 class="display-6 fw-bold text-dark mb-0 mt-1">{{ total_products }}</h2>
+                <div class="small text-muted mt-2">Across all stores</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card card-stat shadow-sm border-0 border-start border-info border-4 h-100">
+            <div class="card-body">
+                <span class="text-muted small text-uppercase fw-semibold">Price Records Logged</span>
+                <h2 class="display-6 fw-bold text-dark mb-0 mt-1">{{ total_price_records }}</h2>
+                <div class="small text-muted mt-2">Supplier purchasing price updates</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card card-stat shadow-sm border-0 border-start border-warning border-4 h-100">
+            <div class="card-body">
+                <span class="text-muted small text-uppercase fw-semibold">Products with Margin Alert</span>
+                <h2 class="display-6 fw-bold text-warning mb-0 mt-1">{{ system_low_margins_count }}</h2>
+                <div class="small text-muted mt-2">Require store owner price adjustment</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Registered Resellers Table -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold text-dark">
+            <i class="bi bi-people me-2 text-primary"></i>Registered Small Resellers &amp; Store Owners
+        </h5>
+        <span class="badge bg-secondary">{{ total_resellers }} Total</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Username</th>
+                    <th>Business / Store Name</th>
+                    <th>Contact Information</th>
+                    <th>Products Tracked</th>
+                    <th>Date Joined</th>
+                    <th>Role</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for reseller in resellers %}
+                <tr>
+                    <td>
+                        <strong class="text-dark">{{ reseller.username }}</strong>
+                        {% if reseller.get_full_name %}
+                            <div class="small text-muted">{{ reseller.get_full_name }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <i class="bi bi-shop me-1 text-secondary"></i>
+                        {{ reseller.business_name|default:"Not specified" }}
+                    </td>
+                    <td>
+                        <div><i class="bi bi-envelope me-1"></i>{{ reseller.email }}</div>
+                        {% if reseller.contact_number %}
+                            <div class="small text-muted"><i class="bi bi-telephone me-1"></i>{{ reseller.contact_number }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-primary fs-6">{{ reseller.product_count }}</span>
+                    </td>
+                    <td>{{ reseller.date_joined|date:"M d, Y" }}</td>
+                    <td><span class="badge bg-success">{{ reseller.get_role_display }}</span></td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-muted">
+                        No resellers registered yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

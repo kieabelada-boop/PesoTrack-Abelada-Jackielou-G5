@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if form.initial_purchase_price %}Add New Product{% else %}Edit {{ form.instance.name }}{% endif %} - PesoTrack
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+        <div class="mb-3">
+            <a href="{% if form.instance.pk %}{% url 'product_detail' form.instance.pk %}{% else %}{% url 'product_list' %}{% endif %}" class="text-decoration-none text-muted">
+                <i class="bi bi-arrow-left me-1"></i>Cancel &amp; Go Back
+            </a>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h4 class="mb-0 fw-bold text-dark">
+                    {% if form.initial_purchase_price %}
+                        <i class="bi bi-plus-circle me-2 text-primary"></i>Add New Product to Track
+                    {% else %}
+                        <i class="bi bi-pencil-square me-2 text-primary"></i>Edit Product: {{ form.instance.name }}
+                    {% endif %}
+                </h4>
+                <p class="text-muted small mb-0 mt-1">
+                    {% if form.initial_purchase_price %}
+                        Enter product details and the initial purchasing cost to begin monitoring margin shifts.
+                    {% else %}
+                        Update retail selling price, unit, or margin alert threshold.
+                    {% endif %}
+                </p>
+            </div>
+            <div class="card-body p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <!-- Basic Product Details -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-md-8">
+                            <label class="form-label fw-semibold">Product Name <span class="text-danger">*</span></label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                                <div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Category <span class="text-danger">*</span></label>
+                            {{ form.category }}
+                            {% if form.category.errors %}
+                                <div class="text-danger small mt-1">{{ form.category.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Unit of Measure <span class="text-danger">*</span></label>
+                            {{ form.unit }}
+                            <div class="form-text small">{{ form.unit.help_text }}</div>
+                            {% if form.unit.errors %}
+                                <div class="text-danger small mt-1">{{ form.unit.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Retail Selling Price (₱) <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">₱</span>
+                                {{ form.selling_price }}
+                            </div>
+                            <div class="form-text small">{{ form.selling_price.help_text }}</div>
+                            {% if form.selling_price.errors %}
+                                <div class="text-danger small mt-1">{{ form.selling_price.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Margin Alert Threshold (%) <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                {{ form.margin_threshold }}
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <div class="form-text small">{{ form.margin_threshold.help_text }}</div>
+                            {% if form.margin_threshold.errors %}
+                                <div class="text-danger small mt-1">{{ form.margin_threshold.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Initial Price Recording Fields (When Creating) -->
+                    {% if form.initial_purchase_price %}
+                    <div class="card bg-light border-0 my-4">
+                        <div class="card-body p-3">
+                            <h6 class="fw-bold text-dark mb-2">
+                                <i class="bi bi-tag-fill me-1 text-warning"></i>Initial Purchasing Cost Information
+                            </h6>
+                            <p class="small text-muted mb-3">This creates your product's baseline price record to compare against future supplier price changes.</p>
+
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label fw-semibold">Initial Supplier Cost (₱) <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">₱</span>
+                                        {{ form.initial_purchase_price }}
+                                    </div>
+                                    <div class="form-text small">{{ form.initial_purchase_price.help_text }}</div>
+                                    {% if form.initial_purchase_price.errors %}
+                                        <div class="text-danger small mt-1">{{ form.initial_purchase_price.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label fw-semibold">Date Purchased / Effective Date</label>
+                                    {{ form.effective_date }}
+                                    {% if form.effective_date.errors %}
+                                        <div class="text-danger small mt-1">{{ form.effective_date.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label fw-semibold">Supplier / Wholesaler</label>
+                                    {{ form.supplier }}
+                                    <div class="form-text small">{{ form.supplier.help_text }}</div>
+                                    {% if form.supplier.errors %}
+                                        <div class="text-danger small mt-1">{{ form.supplier.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label fw-semibold">Batch Notes</label>
+                                    {{ form.notes }}
+                                    {% if form.notes.errors %}
+                                        <div class="text-danger small mt-1">{{ form.notes.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Optional SKU and Description -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">SKU / Barcode (Optional)</label>
+                            {{ form.sku }}
+                            {% if form.sku.errors %}
+                                <div class="text-danger small mt-1">{{ form.sku.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Product Description / Notes (Optional)</label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                                <div class="text-danger small mt-1">{{ form.description.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <a href="{% if form.instance.pk %}{% url 'product_detail' form.instance.pk %}{% else %}{% url 'product_list' %}{% endif %}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                            <i class="bi bi-check2-circle me-1"></i>Save Product
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

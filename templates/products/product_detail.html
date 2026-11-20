@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+
+{% block title %}{{ product.name }} - Details & Margin - PesoTrack{% endblock %}
+
+{% block content %}
+<!-- Header Navigation -->
+<div class="mb-3">
+    <a href="{% url 'product_list' %}" class="text-decoration-none text-muted">
+        <i class="bi bi-arrow-left me-1"></i>Back to Products Catalog
+    </a>
+</div>
+
+<!-- Product Title and Action Buttons -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <h1 class="h2 mb-0 fw-bold text-dark">{{ product.name }}</h1>
+            <span class="badge bg-secondary">{{ product.get_category_display }}</span>
+            <span class="badge bg-light text-dark border">Per {{ product.unit }}</span>
+            {% if product.sku %}
+                <span class="badge bg-light text-dark border">SKU: {{ product.sku }}</span>
+            {% endif %}
+        </div>
+        <p class="text-muted mb-0 small">
+            Created on {{ product.created_at|date:"M d, Y" }} &bull; Owned by {{ product.user.business_name|default:product.user.username }}
+        </p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-warning text-dark fw-semibold" href="{% url 'product_price_record_create' product.id %}">
+            <i class="bi bi-graph-up-arrow me-1"></i>Record New Cost / Price Shift
+        </a>
+        <a class="btn btn-outline-primary" href="{% url 'product_update' product.id %}">
+            <i class="bi bi-pencil me-1"></i>Edit Product
+        </a>
+        <a class="btn btn-outline-danger" href="{% url 'product_delete' product.id %}">
+            <i class="bi bi-trash me-1"></i>Delete
+        </a>
+    </div>
+</div>
+
+<!-- Low Margin / Loss Alert Banner -->
+{% if product.is_loss %}
+<div class="alert alert-danger shadow-sm border-danger mb-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+    <div class="d-flex align-items-start gap-3">
+        <i class="bi bi-exclamation-octagon-fill fs-2 text-danger mt-1"></i>
+        <div>
+            <h5 class="alert-heading fw-bold mb-1">🚨 CRITICAL LOSS ALERT: Selling at a Negative Margin!</h5>
+            <p class="mb-1">
+                Your purchasing cost (<strong>₱{{ product.current_purchase_price|floatformat:2 }}</strong>) exceeds your retail selling price (<strong>₱{{ product.selling_price|floatformat:2 }}</strong>).
+                You are currently losing <strong>₱{{ product.unit_profit|stringformat:".2f"|slice:"1:" }}</strong> on every unit sold.
+            </p>
+            <div class="small">
+                To achieve your target profit margin of <strong>{{ product.margin_threshold }}%</strong>, your recommended retail selling price is <strong>₱{{ suggested_price|floatformat:2 }}</strong>.
+            </div>
+        </div>
+    </div>
+    <div class="text-end">
+        <form method="post" action="{% url 'apply_suggested_price' product.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger fw-bold">
+                <i class="bi bi-lightning-charge-fill me-1"></i>Apply Suggested ₱{{ suggested_price|floatformat:2 }}
+            </button>
+        </form>
+    </div>
+</div>
+{% elif product.is_low_margin %}
+<div class="alert alert-warning shadow-sm border-warning mb-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+    <div class="d-flex align-items-start gap-3">
+        <i class="bi bi-exclamation-triangle-fill fs-2 text-warning mt-1"></i>
+        <div>
+            <h5 class="alert-heading fw-bold mb-1">⚠️ LOW MARGIN ALERT: Profit Margin Below Threshold</h5>
+            <p class="mb-1">
+                The current profit margin of <strong>{{ product.profit_margin_percentage }}%</strong> is below your target threshold of <strong>{{ product.margin_threshold }}%</strong>
+                (shortfall of {{ product.margin_shortfall }}%). Recent purchasing price shifts have eroded your profit.
+            </p>
+            <div class="small text-dark">
+                Recommended retail selling price to restore a {{ product.margin_threshold }}% margin: <strong class="fs-6">₱{{ suggested_price|floatformat:2 }}</strong>.
+            </div>
+        </div>
+    </div>
+    <div class="text-end">
+        <form method="post" action="{% url 'apply_suggested_price' product.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-success fw-bold text-nowrap">
+                <i class="bi bi-check-circle-fill me-1"></i>Apply Suggested ₱{{ suggested_price|floatformat:2 }}
+            </button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- Financial KPI Overview Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card card-stat shadow-sm border-0 border-start border-primary border-4 h-100">
+            <div class="card-body py-3">
+                <span class="text-muted small text-uppercase fw-semibold">Supplier Cost</span>
+                <h4 class="fw-bold text-dark mb-0 mt-1">₱{{ product.current_purchase_price|floatformat:2 }}</h4>
+                <div class="small text-muted mt-1">Latest cost</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card card-stat shadow-sm border-0 border-start border-info border-4 h-100">
+            <div class="card-body py-3">
+                <span class="text-muted small text-uppercase fw-semibold">Retail Price</span>
+                <h4 class="fw-bold text-primary mb-0 mt-1">₱{{ product.selling_price|floatformat:2 }}</h4>
+                <div class="small text-muted mt-1">To customer</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card card-stat shadow-sm border-0 border-start border-secondary border-4 h-100">
+            <div class="card-body py-3">
+                <span class="text-muted small text-uppercase fw-semibold">Unit Profit</span>
+                <h4 class="fw-bold {% if product.unit_profit < 0 %}text-danger{% else %}text-success{% endif %} mb-0 mt-1">
+                    {% if product.unit_profit < 0 %}
+                        -₱{{ product.unit_profit|stringformat:".2f"|slice:"1:" }}
+                    {% else %}
+                        ₱{{ product.unit_profit|floatformat:2 }}
+                    {% endif %}
+                </h4>
+                <div class="small text-muted mt-1">Selling - Cost</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card card-stat shadow-sm border-0 border-start {% if product.is_loss %}border-danger{% elif product.is_low_margin %}border-warning{% else %}border-success{% endif %} border-4 h-100">
+            <div class="card-body py-3">
+                <span class="text-muted small text-uppercase fw-semibold">Profit Margin</span>
+                <h4 class="fw-bold {% if product.is_loss %}text-danger{% elif product.is_low_margin %}text-warning{% else %}text-success{% endif %} mb-0 mt-1">
+                    {{ product.profit_margin_percentage }}%
+                </h4>
+                <div class="small text-muted mt-1">Profit / Selling</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card card-stat shadow-sm border-0 border-start border-dark border-4 h-100">
+            <div class="card-body py-3">
+                <span class="text-muted small text-uppercase fw-semibold">Markup</span>
+                <h4 class="fw-bold text-dark mb-0 mt-1">{{ product.markup_percentage }}%</h4>
+                <div class="small text-muted mt-1">Profit / Cost</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card card-stat shadow-sm border-0 border-start border-warning border-4 h-100">
+            <div class="card-body py-3">
+                <span class="text-muted small text-uppercase fw-semibold">Target Threshold</span>
+                <h4 class="fw-bold text-dark mb-0 mt-1">{{ product.margin_threshold }}%</h4>
+                <div class="small text-muted mt-1">Alert boundary</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Price Shift Analysis Card -->
+{% if product.previous_purchase_price %}
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <h5 class="fw-bold text-dark mb-3">
+            <i class="bi bi-clock-history me-2 text-primary"></i>Latest Purchasing Cost Shift Analysis
+        </h5>
+        <div class="row g-3 align-items-center">
+            <div class="col-md-3">
+                <span class="text-muted small">Previous Cost:</span>
+                <div class="fs-5 fw-bold text-dark">₱{{ product.previous_purchase_price|floatformat:2 }}</div>
+            </div>
+            <div class="col-md-3">
+                <span class="text-muted small">Current Cost:</span>
+                <div class="fs-5 fw-bold text-dark">₱{{ product.current_purchase_price|floatformat:2 }}</div>
+            </div>
+            <div class="col-md-3">
+                <span class="text-muted small">Purchasing Cost Shift:</span>
+                <div>
+                    {% if product.price_change_amount > 0 %}
+                        <span class="badge bg-danger fs-6">
+                            <i class="bi bi-arrow-up-right me-1"></i>+₱{{ product.price_change_amount|floatformat:2 }} (+{{ product.price_change_percentage }}%)
+                        </span>
+                        <div class="small text-danger mt-1">Supplier cost increased</div>
+                    {% elif product.price_change_amount < 0 %}
+                        <span class="badge bg-success fs-6">
+                            <i class="bi bi-arrow-down-right me-1"></i>-₱{{ product.price_change_amount|stringformat:".2f"|slice:"1:" }} ({{ product.price_change_percentage }}%)
+                        </span>
+                        <div class="small text-success mt-1">Supplier cost decreased</div>
+                    {% else %}
+                        <span class="badge bg-secondary fs-6">No change</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-3">
+                <span class="text-muted small">Margin Status:</span>
+                <div>
+                    {% if product.is_loss %}
+                        <span class="badge bg-danger fs-6">Loss Alert</span>
+                    {% elif product.is_low_margin %}
+                        <span class="badge bg-warning text-dark fs-6">Below {{ product.margin_threshold }}% Target</span>
+                    {% else %}
+                        <span class="badge bg-success fs-6">Healthy Margin</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Chronological Price History Table -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-0 fw-bold text-dark">
+                <i class="bi bi-journal-text me-2 text-primary"></i>Purchasing Price History Timeline
+            </h5>
+            <small class="text-muted">{{ total_records }} price record(s) logged</small>
+        </div>
+        <a class="btn btn-warning btn-sm text-dark fw-semibold" href="{% url 'product_price_record_create' product.id %}">
+            <i class="bi bi-plus-lg me-1"></i>Record Price Shift
+        </a>
+    </div>
+    {% if price_records %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Effective Date</th>
+                    <th>Supplier Cost</th>
+                    <th>Cost Shift</th>
+                    <th>Retail Selling Price</th>
+                    <th>Margin at Time</th>
+                    <th>Supplier / Wholesaler</th>
+                    <th>Notes</th>
+                    <th>Logged By</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in price_records %}
+                <tr>
+                    <td>{{ record.effective_date|date:"M d, Y" }}</td>
+                    <td><strong>₱{{ record.purchase_price|floatformat:2 }}</strong></td>
+                    <td>
+                        {% if record.previous_record %}
+                            {% if record.price_difference > 0 %}
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-arrow-up-right me-1"></i>+₱{{ record.price_difference|floatformat:2 }} (+{{ record.percentage_change }}%)
+                                </span>
+                            {% elif record.price_difference < 0 %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-arrow-down-right me-1"></i>-₱{{ record.price_difference|stringformat:".2f"|slice:"1:" }} ({{ record.percentage_change }}%)
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">Same</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge bg-info text-dark">Baseline Cost</span>
+                        {% endif %}
+                    </td>
+                    <td>₱{{ product.selling_price|floatformat:2 }}</td>
+                    <td>
+                        {% if record.profit_margin_at_recording < 0 %}
+                            <span class="badge bg-danger">{{ record.profit_margin_at_recording }}%</span>
+                        {% elif record.profit_margin_at_recording < product.margin_threshold %}
+                            <span class="badge bg-warning text-dark">{{ record.profit_margin_at_recording }}%</span>
+                        {% else %}
+                            <span class="badge bg-success">{{ record.profit_margin_at_recording }}%</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ record.supplier|default:"-" }}</td>
+                    <td class="small text-muted">{{ record.notes|default:"-" }}</td>
+                    <td class="small">{{ record.recorded_by.username|default:"System" }}</td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            <a href="{% url 'price_record_update' record.id %}" class="btn btn-outline-secondary" title="Edit this record">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'price_record_delete' record.id %}" class="btn btn-outline-danger" title="Delete this record">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-4 text-muted">
+        No price records found.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
