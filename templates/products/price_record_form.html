@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if is_edit %}Edit Price Record{% else %}Record Price Shift{% endif %} - PesoTrack
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-7">
+        <div class="mb-3">
+            <a href="{% if product %}{% url 'product_detail' product.id %}{% else %}{% url 'price_history' %}{% endif %}" class="text-decoration-none text-muted">
+                <i class="bi bi-arrow-left me-1"></i>Cancel &amp; Go Back
+            </a>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h4 class="mb-0 fw-bold text-dark">
+                    <i class="bi bi-graph-up-arrow me-2 text-warning"></i>
+                    {% if is_edit %}
+                        Edit Price Record for {{ product.name }}
+                    {% elif product %}
+                        Record New Purchasing Cost for {{ product.name }}
+                    {% else %}
+                        Record New Purchasing Cost / Price Shift
+                    {% endif %}
+                </h4>
+                <p class="text-muted small mb-0 mt-1">
+                    Log new supplier purchasing prices to detect incremental cost increases and avoid profit margin erosion.
+                </p>
+            </div>
+            <div class="card-body p-4">
+                {% if product %}
+                <!-- Current Product Snapshot -->
+                <div class="alert alert-light border mb-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small">Current Supplier Cost:</span>
+                            <div class="fs-5 fw-bold text-dark">₱{{ product.current_purchase_price|floatformat:2 }}</div>
+                        </div>
+                        <div>
+                            <span class="text-muted small">Retail Selling Price:</span>
+                            <div class="fs-5 fw-bold text-primary">₱{{ product.selling_price|floatformat:2 }}</div>
+                        </div>
+                        <div>
+                            <span class="text-muted small">Current Margin:</span>
+                            <div class="fs-5 fw-bold {% if product.is_low_margin %}text-warning{% else %}text-success{% endif %}">
+                                {{ product.profit_margin_percentage }}%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {% if form.product %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Select Product <span class="text-danger">*</span></label>
+                        {{ form.product }}
+                        {% if form.product.errors %}
+                            <div class="text-danger small mt-1">{{ form.product.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">New Purchasing Cost (₱) <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">₱</span>
+                                {{ form.purchase_price }}
+                            </div>
+                            <div class="form-text small">{{ form.purchase_price.help_text }}</div>
+                            {% if form.purchase_price.errors %}
+                                <div class="text-danger small mt-1">{{ form.purchase_price.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Effective Date <span class="text-danger">*</span></label>
+                            {{ form.effective_date }}
+                            {% if form.effective_date.errors %}
+                                <div class="text-danger small mt-1">{{ form.effective_date.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Supplier / Wholesaler</label>
+                        {{ form.supplier }}
+                        <div class="form-text small">{{ form.supplier.help_text }}</div>
+                        {% if form.supplier.errors %}
+                            <div class="text-danger small mt-1">{{ form.supplier.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Reason for Change / Notes</label>
+                        {{ form.notes }}
+                        <div class="form-text small">{{ form.notes.help_text }}</div>
+                        {% if form.notes.errors %}
+                            <div class="text-danger small mt-1">{{ form.notes.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <a href="{% if product %}{% url 'product_detail' product.id %}{% else %}{% url 'price_history' %}{% endif %}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-warning text-dark fw-bold px-4">
+                            <i class="bi bi-check2-circle me-1"></i>Save Price Record
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
