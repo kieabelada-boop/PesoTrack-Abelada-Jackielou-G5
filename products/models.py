@@ -184,6 +184,108 @@ class Product(models.Model):
             return 'down'
         return 'same'
 
+    @property
+    def total_units_purchased(self):
+        """Total quantity of units or packs recorded across all purchase records."""
+        total = sum(r.quantity for r in self.price_records.all())
+        return total if total > 0 else self.price_records.count()
+
+    @property
+    def total_purchase_spend(self):
+        """Total cost spent across all purchase records."""
+        records = list(self.price_records.all())
+        if not records:
+            return Decimal('0.00')
+        return sum(r.purchase_price * Decimal(r.quantity) for r in records)
+
+    @property
+    def average_purchase_price(self):
+        """
+        Calculates the weighted average purchasing cost:
+        Average Cost = Sum(Price * Quantity) / Sum(Quantity).
+        """
+        records = list(self.price_records.all())
+        if not records:
+            return self.current_purchase_price or Decimal('0.00')
+        total_qty = sum(r.quantity for r in records)
+        if total_qty > 0:
+            total_spend = sum(r.purchase_price * Decimal(r.quantity) for r in records)
+            avg = total_spend / Decimal(total_qty)
+            return round(avg, 2)
+        return self.current_purchase_price
+
+    @property
+    def supplier_comparison(self):
+        """
+        Compares latest purchasing prices across different suppliers for this product.
+        Identifies the supplier with the LOWEST price, calculates cost differences,
+        and evaluates profit margins per supplier.
+        """
+        records = list(self.price_records.order_by('-effective_date', '-created_at', '-id'))
+        if not records:
+            return []
+
+        supplier_map = {}
+        for r in records:
+            s_name = (r.supplier or "").strip() or "Standard Wholesaler"
+            key = s_name.lower()
+            if key not in supplier_map:
+                supplier_map[key] = {
+                    'name': s_name,
+                    'latest_price': r.purchase_price,
+                    'latest_date': r.effective_date,
+                    'latest_record': r,
+                    'records': [r],
+                }
+            else:
+                supplier_map[key]['records'].append(r)
+
+        if not supplier_map:
+            return []
+
+        min_price = min(item['latest_price'] for item in supplier_map.values())
+        max_price = max(item['latest_price'] for item in supplier_map.values())
+
+        comparison_list = []
+        for item in supplier_map.values():
+            is_lowest = (item['latest_price'] == min_price)
+            diff = item['latest_price'] - min_price
+            if self.selling_price > 0:
+                margin = ((self.selling_price - item['latest_price']) / self.selling_price) * Decimal('100')
+                margin = round(margin, 2)
+            else:
+                margin = Decimal('0.00')
+
+            comparison_list.append({
+                'name': item['name'],
+                'latest_price': item['latest_price'],
+                'latest_date': item['latest_date'],
+                'is_lowest': is_lowest,
+                'difference_from_lowest': diff,
+                'margin_at_cost': margin,
+                'record_count': len(item['records']),
+                'total_purchased': sum(rec.quantity for rec in item['records']),
+            })
+
+        # Sort so the lowest priced supplier appears first
+        comparison_list.sort(key=lambda x: (not x['is_lowest'], x['latest_price']))
+        return comparison_list
+
+    @property
+    def lowest_supplier(self):
+        """Returns the supplier info dict that offers the lowest purchasing price."""
+        comp = self.supplier_comparison
+        return comp[0] if comp else None
+
+    @property
+    def supplier_savings_per_unit(self):
+        """Potential savings per unit between most expensive and cheapest supplier."""
+        comp = self.supplier_comparison
+        if len(comp) > 1:
+            prices = [item['latest_price'] for item in comp]
+            return max(prices) - min(prices)
+        return Decimal('0.00')
+
 
 class PriceRecord(models.Model):
     product = models.ForeignKey(
@@ -206,6 +308,12 @@ class PriceRecord(models.Model):
         validators=[MinValueValidator(Decimal('0.01'))],
         verbose_name="Purchasing Price / Cost (₱)",
         help_text="Purchasing price per unit from supplier"
+    )
+    quantity = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1)],
+        verbose_name="Quantity / Packs Purchased",
+        help_text="Number of units/packs purchased at this cost"
     )
     effective_date = models.DateField(
         default=timezone.now,

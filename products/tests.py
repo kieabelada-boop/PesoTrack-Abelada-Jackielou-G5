@@ -353,3 +353,143 @@ class CoreFeatureViewsAndCRUDTests(TestCase):
         admin_resp = self.client.get(reverse('admin_dashboard'))
         self.assertEqual(admin_resp.status_code, 200)
         self.assertContains(admin_resp, "Administrator Dashboard")
+
+    def test_supplier_price_comparison_and_average_cost_matching_screenshot(self):
+        """
+        Verify supplier price comparison feature matching the user-provided design:
+        - Product: Nescafé 3-in-1, Selling Price: ₱50.00 / pack
+        - Purchase 1: Gaisano at ₱40.00 (12 packs) on Oct 19
+        - Purchase 2: Puregold at ₱43.00 (12 packs) on Oct 20
+        - Total packs purchased: 24 packs
+        - Average cost / pack: (40*12 + 43*12) / 24 = ₱41.50
+        - Lowest supplier: Gaisano with LOWEST badge
+        - Puregold cost: ₱43.00 (+₱3.00 vs lowest)
+        """
+        self.client.login(username='reseller_one', password='Password123!')
+
+        product = Product.objects.create(
+            user=self.reseller1,
+            name="Nescafé 3-in-1",
+            category="beverages",
+            unit="pack",
+            selling_price=Decimal('50.00'),
+            margin_threshold=Decimal('15.00')
+        )
+
+        # Record purchase from Gaisano (Oct 19)
+        PriceRecord.objects.create(
+            product=product,
+            recorded_by=self.reseller1,
+            supplier="Gaisano",
+            purchase_price=Decimal('40.00'),
+            quantity=12,
+            effective_date=timezone.datetime(2026, 10, 19).date()
+        )
+
+        # Record purchase from Puregold (Oct 20)
+        PriceRecord.objects.create(
+            product=product,
+            recorded_by=self.reseller1,
+            supplier="Puregold",
+            purchase_price=Decimal('43.00'),
+            quantity=12,
+            effective_date=timezone.datetime(2026, 10, 20).date()
+        )
+
+        # Verify model calculations
+        self.assertEqual(product.total_units_purchased, 24)
+        self.assertEqual(product.average_purchase_price, Decimal('41.50'))
+        self.assertEqual(product.selling_price, Decimal('50.00'))
+
+        comp = product.supplier_comparison
+        self.assertEqual(len(comp), 2)
+        # Gaisano should be first and marked as lowest
+        self.assertEqual(comp[0]['name'], "Gaisano")
+        self.assertTrue(comp[0]['is_lowest'])
+        self.assertEqual(comp[0]['latest_price'], Decimal('40.00'))
+
+        # Puregold should have difference of 3.00
+        self.assertEqual(comp[1]['name'], "Puregold")
+        self.assertFalse(comp[1]['is_lowest'])
+        self.assertEqual(comp[1]['latest_price'], Decimal('43.00'))
+        self.assertEqual(comp[1]['difference_from_lowest'], Decimal('3.00'))
+
+        # Verify detail page UI renders exact values
+        resp = self.client.get(reverse('product_detail', kwargs={'pk': product.pk}))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Nescafé 3-in-1")
+        self.assertContains(resp, "24 packs purchased")
+        self.assertContains(resp, "41.50")  # Average cost
+        self.assertContains(resp, "50.00")  # Selling price
+        self.assertContains(resp, "Gaisano")
+        self.assertContains(resp, "LOWEST")
+        self.assertContains(resp, "Puregold")
+        self.assertContains(resp, "40.00")
+        self.assertContains(resp, "43.00")
+        self.assertContains(resp, "Compare stores")
+        self.assertContains(resp, "Purchase history")
+
+    def test_adjust_selling_price_action(self):
+        """Store owner can adjust selling price directly via Adjust price action."""
+        self.client.login(username='reseller_one', password='Password123!')
+
+        product = Product.objects.create(
+            user=self.reseller1,
+            name="Tang Orange 25g",
+            category="beverages",
+            unit="sachet",
+            selling_price=Decimal('18.00'),
+            margin_threshold=Decimal('20.00')
+        )
+        PriceRecord.objects.create(
+            product=product,
+            recorded_by=self.reseller1,
+            supplier="Puregold",
+            purchase_price=Decimal('15.00'),
+            quantity=10
+        )
+
+        adjust_url = reverse('adjust_selling_price', kwargs={'pk': product.pk})
+        resp = self.client.post(adjust_url, {'selling_price': '20.00'}, follow=True)
+        self.assertEqual(resp.status_code, 200)
+
+        product.refresh_from_db()
+        self.assertEqual(product.selling_price, Decimal('20.00'))
+        # Margin: (20 - 15) / 20 * 100 = 25.00% >= 20.00%
+        self.assertEqual(product.profit_margin_percentage, Decimal('25.00'))
+        self.assertFalse(product.is_low_margin)
+
+    def test_compare_suppliers_catalog_view(self):
+        """Reseller can view the catalog-wide supplier comparison page."""
+        self.client.login(username='reseller_one', password='Password123!')
+
+        product = Product.objects.create(
+            user=self.reseller1,
+            name="Lucky Me Beef",
+            category="instant_meals",
+            unit="pack",
+            selling_price=Decimal('15.00'),
+            margin_threshold=Decimal('15.00')
+        )
+        PriceRecord.objects.create(
+            product=product,
+            recorded_by=self.reseller1,
+            supplier="Gaisano",
+            purchase_price=Decimal('11.00'),
+            quantity=20
+        )
+        PriceRecord.objects.create(
+            product=product,
+            recorded_by=self.reseller1,
+            supplier="Puregold",
+            purchase_price=Decimal('12.50'),
+            quantity=20
+        )
+
+        resp = self.client.get(reverse('compare_suppliers'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Compare Stores &amp; Wholesalers")
+        self.assertContains(resp, "Lucky Me Beef")
+        self.assertContains(resp, "Gaisano")
+        self.assertContains(resp, "Puregold")
+        self.assertContains(resp, "1.50")  # Savings per unit: 12.50 - 11.00 = 1.50

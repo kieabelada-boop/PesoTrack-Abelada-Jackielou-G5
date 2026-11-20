@@ -1,294 +1,389 @@
 {% extends "base.html" %}
 
-{% block title %}{{ product.name }} - Details & Margin - PesoTrack{% endblock %}
+{% block title %}{{ product.name }} - Product Overview - PesoTrack{% endblock %}
 
 {% block content %}
-<!-- Header Navigation -->
-<div class="mb-3">
-    <a href="{% url 'product_list' %}" class="text-decoration-none text-muted">
-        <i class="bi bi-arrow-left me-1"></i>Back to Products Catalog
-    </a>
-</div>
+<div class="row justify-content-center">
+    <div class="col-12 col-md-10 col-lg-8">
+        <!-- Top Back Bar -->
+        <div class="d-flex align-items-center mb-4 gap-3">
+            <a href="{% url 'product_list' %}" class="btn btn-light rounded-circle border shadow-sm d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;" title="Back to products">
+                <i class="bi bi-arrow-left fs-5 text-dark"></i>
+            </a>
+            <h1 class="h3 fw-bold text-dark mb-0">Product overview</h1>
+        </div>
 
-<!-- Product Title and Action Buttons -->
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
-    <div>
-        <div class="d-flex align-items-center gap-2 mb-1">
-            <h1 class="h2 mb-0 fw-bold text-dark">{{ product.name }}</h1>
-            <span class="badge bg-secondary">{{ product.get_category_display }}</span>
-            <span class="badge bg-light text-dark border">Per {{ product.unit }}</span>
-            {% if product.sku %}
-                <span class="badge bg-light text-dark border">SKU: {{ product.sku }}</span>
-            {% endif %}
-        </div>
-        <p class="text-muted mb-0 small">
-            Created on {{ product.created_at|date:"M d, Y" }} &bull; Owned by {{ product.user.business_name|default:product.user.username }}
-        </p>
-    </div>
-    <div class="d-flex gap-2 flex-wrap">
-        <a class="btn btn-warning text-dark fw-semibold" href="{% url 'product_price_record_create' product.id %}">
-            <i class="bi bi-graph-up-arrow me-1"></i>Record New Cost / Price Shift
-        </a>
-        <a class="btn btn-outline-primary" href="{% url 'product_update' product.id %}">
-            <i class="bi bi-pencil me-1"></i>Edit Product
-        </a>
-        <a class="btn btn-outline-danger" href="{% url 'product_delete' product.id %}">
-            <i class="bi bi-trash me-1"></i>Delete
-        </a>
-    </div>
-</div>
-
-<!-- Low Margin / Loss Alert Banner -->
-{% if product.is_loss %}
-<div class="alert alert-danger shadow-sm border-danger mb-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-    <div class="d-flex align-items-start gap-3">
-        <i class="bi bi-exclamation-octagon-fill fs-2 text-danger mt-1"></i>
-        <div>
-            <h5 class="alert-heading fw-bold mb-1">🚨 CRITICAL LOSS ALERT: Selling at a Negative Margin!</h5>
-            <p class="mb-1">
-                Your purchasing cost (<strong>₱{{ product.current_purchase_price|floatformat:2 }}</strong>) exceeds your retail selling price (<strong>₱{{ product.selling_price|floatformat:2 }}</strong>).
-                You are currently losing <strong>₱{{ product.unit_profit|stringformat:".2f"|slice:"1:" }}</strong> on every unit sold.
-            </p>
-            <div class="small">
-                To achieve your target profit margin of <strong>{{ product.margin_threshold }}%</strong>, your recommended retail selling price is <strong>₱{{ suggested_price|floatformat:2 }}</strong>.
+        <!-- Product Identity Header -->
+        <div class="d-flex align-items-center gap-3 mb-4">
+            <!-- Product Avatar / Icon -->
+            <div class="d-flex align-items-center justify-content-center flex-shrink-0 shadow-sm" style="width: 64px; height: 64px; background: #FDE8D7; border-radius: 16px; border: 1.5px solid #FED7AA;">
+                {% if product.category == 'beverages' %}
+                    <i class="bi bi-cup-hot-fill fs-2" style="color: #C2410C;"></i>
+                {% elif product.category == 'canned_goods' %}
+                    <i class="bi bi-box2-fill fs-2" style="color: #EA580C;"></i>
+                {% elif product.category == 'instant_meals' %}
+                    <i class="bi bi-fire fs-2" style="color: #D97706;"></i>
+                {% elif product.category == 'snacks' %}
+                    <i class="bi bi-egg-fried fs-2" style="color: #B45309;"></i>
+                {% else %}
+                    <i class="bi bi-bag-check-fill fs-2" style="color: #0F766E;"></i>
+                {% endif %}
             </div>
-        </div>
-    </div>
-    <div class="text-end">
-        <form method="post" action="{% url 'apply_suggested_price' product.id %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-danger fw-bold">
-                <i class="bi bi-lightning-charge-fill me-1"></i>Apply Suggested ₱{{ suggested_price|floatformat:2 }}
-            </button>
-        </form>
-    </div>
-</div>
-{% elif product.is_low_margin %}
-<div class="alert alert-warning shadow-sm border-warning mb-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-    <div class="d-flex align-items-start gap-3">
-        <i class="bi bi-exclamation-triangle-fill fs-2 text-warning mt-1"></i>
-        <div>
-            <h5 class="alert-heading fw-bold mb-1">⚠️ LOW MARGIN ALERT: Profit Margin Below Threshold</h5>
-            <p class="mb-1">
-                The current profit margin of <strong>{{ product.profit_margin_percentage }}%</strong> is below your target threshold of <strong>{{ product.margin_threshold }}%</strong>
-                (shortfall of {{ product.margin_shortfall }}%). Recent purchasing price shifts have eroded your profit.
-            </p>
-            <div class="small text-dark">
-                Recommended retail selling price to restore a {{ product.margin_threshold }}% margin: <strong class="fs-6">₱{{ suggested_price|floatformat:2 }}</strong>.
-            </div>
-        </div>
-    </div>
-    <div class="text-end">
-        <form method="post" action="{% url 'apply_suggested_price' product.id %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-success fw-bold text-nowrap">
-                <i class="bi bi-check-circle-fill me-1"></i>Apply Suggested ₱{{ suggested_price|floatformat:2 }}
-            </button>
-        </form>
-    </div>
-</div>
-{% endif %}
-
-<!-- Financial KPI Overview Cards -->
-<div class="row g-3 mb-4">
-    <div class="col-6 col-md-4 col-lg-2">
-        <div class="card card-stat shadow-sm border-0 border-start border-primary border-4 h-100">
-            <div class="card-body py-3">
-                <span class="text-muted small text-uppercase fw-semibold">Supplier Cost</span>
-                <h4 class="fw-bold text-dark mb-0 mt-1">₱{{ product.current_purchase_price|floatformat:2 }}</h4>
-                <div class="small text-muted mt-1">Latest cost</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-4 col-lg-2">
-        <div class="card card-stat shadow-sm border-0 border-start border-info border-4 h-100">
-            <div class="card-body py-3">
-                <span class="text-muted small text-uppercase fw-semibold">Retail Price</span>
-                <h4 class="fw-bold text-primary mb-0 mt-1">₱{{ product.selling_price|floatformat:2 }}</h4>
-                <div class="small text-muted mt-1">To customer</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-4 col-lg-2">
-        <div class="card card-stat shadow-sm border-0 border-start border-secondary border-4 h-100">
-            <div class="card-body py-3">
-                <span class="text-muted small text-uppercase fw-semibold">Unit Profit</span>
-                <h4 class="fw-bold {% if product.unit_profit < 0 %}text-danger{% else %}text-success{% endif %} mb-0 mt-1">
-                    {% if product.unit_profit < 0 %}
-                        -₱{{ product.unit_profit|stringformat:".2f"|slice:"1:" }}
-                    {% else %}
-                        ₱{{ product.unit_profit|floatformat:2 }}
-                    {% endif %}
-                </h4>
-                <div class="small text-muted mt-1">Selling - Cost</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-4 col-lg-2">
-        <div class="card card-stat shadow-sm border-0 border-start {% if product.is_loss %}border-danger{% elif product.is_low_margin %}border-warning{% else %}border-success{% endif %} border-4 h-100">
-            <div class="card-body py-3">
-                <span class="text-muted small text-uppercase fw-semibold">Profit Margin</span>
-                <h4 class="fw-bold {% if product.is_loss %}text-danger{% elif product.is_low_margin %}text-warning{% else %}text-success{% endif %} mb-0 mt-1">
-                    {{ product.profit_margin_percentage }}%
-                </h4>
-                <div class="small text-muted mt-1">Profit / Selling</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-4 col-lg-2">
-        <div class="card card-stat shadow-sm border-0 border-start border-dark border-4 h-100">
-            <div class="card-body py-3">
-                <span class="text-muted small text-uppercase fw-semibold">Markup</span>
-                <h4 class="fw-bold text-dark mb-0 mt-1">{{ product.markup_percentage }}%</h4>
-                <div class="small text-muted mt-1">Profit / Cost</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-4 col-lg-2">
-        <div class="card card-stat shadow-sm border-0 border-start border-warning border-4 h-100">
-            <div class="card-body py-3">
-                <span class="text-muted small text-uppercase fw-semibold">Target Threshold</span>
-                <h4 class="fw-bold text-dark mb-0 mt-1">{{ product.margin_threshold }}%</h4>
-                <div class="small text-muted mt-1">Alert boundary</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Price Shift Analysis Card -->
-{% if product.previous_purchase_price %}
-<div class="card shadow-sm border-0 mb-4">
-    <div class="card-body">
-        <h5 class="fw-bold text-dark mb-3">
-            <i class="bi bi-clock-history me-2 text-primary"></i>Latest Purchasing Cost Shift Analysis
-        </h5>
-        <div class="row g-3 align-items-center">
-            <div class="col-md-3">
-                <span class="text-muted small">Previous Cost:</span>
-                <div class="fs-5 fw-bold text-dark">₱{{ product.previous_purchase_price|floatformat:2 }}</div>
-            </div>
-            <div class="col-md-3">
-                <span class="text-muted small">Current Cost:</span>
-                <div class="fs-5 fw-bold text-dark">₱{{ product.current_purchase_price|floatformat:2 }}</div>
-            </div>
-            <div class="col-md-3">
-                <span class="text-muted small">Purchasing Cost Shift:</span>
-                <div>
-                    {% if product.price_change_amount > 0 %}
-                        <span class="badge bg-danger fs-6">
-                            <i class="bi bi-arrow-up-right me-1"></i>+₱{{ product.price_change_amount|floatformat:2 }} (+{{ product.price_change_percentage }}%)
-                        </span>
-                        <div class="small text-danger mt-1">Supplier cost increased</div>
-                    {% elif product.price_change_amount < 0 %}
-                        <span class="badge bg-success fs-6">
-                            <i class="bi bi-arrow-down-right me-1"></i>-₱{{ product.price_change_amount|stringformat:".2f"|slice:"1:" }} ({{ product.price_change_percentage }}%)
-                        </span>
-                        <div class="small text-success mt-1">Supplier cost decreased</div>
-                    {% else %}
-                        <span class="badge bg-secondary fs-6">No change</span>
-                    {% endif %}
+            <div class="flex-grow-1">
+                <h2 class="h4 fw-bold text-dark mb-1">{{ product.name }}</h2>
+                <div class="text-secondary small fw-medium">
+                    {{ product.get_category_display }} &bull; {{ product.total_units_purchased }} {{ product.unit }}{% if product.total_units_purchased != 1 %}s{% endif %} purchased
                 </div>
             </div>
-            <div class="col-md-3">
-                <span class="text-muted small">Margin Status:</span>
+            <div class="dropdown">
+                <button class="btn btn-light btn-sm rounded-circle border shadow-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="width: 36px; height: 36px;">
+                    <i class="bi bi-three-dots-vertical"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                    <li><a class="dropdown-item" href="{% url 'product_update' product.id %}"><i class="bi bi-pencil me-2 text-muted"></i>Edit Product Details</a></li>
+                    <li><a class="dropdown-item text-danger" href="{% url 'product_delete' product.id %}"><i class="bi bi-trash me-2"></i>Delete Product</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Margin Alert / Loss Banner (if triggered) -->
+        {% if product.is_loss %}
+        <div class="alert alert-danger shadow-sm border-danger rounded-4 mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2 p-3">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-exclamation-octagon-fill fs-4 text-danger"></i>
                 <div>
-                    {% if product.is_loss %}
-                        <span class="badge bg-danger fs-6">Loss Alert</span>
-                    {% elif product.is_low_margin %}
-                        <span class="badge bg-warning text-dark fs-6">Below {{ product.margin_threshold }}% Target</span>
-                    {% else %}
-                        <span class="badge bg-success fs-6">Healthy Margin</span>
-                    {% endif %}
+                    <strong class="d-block">CRITICAL: Selling at a loss of ₱{{ product.unit_profit|stringformat:".2f"|slice:"1:" }}/{{ product.unit }}</strong>
+                    <span class="small">Cost (₱{{ product.current_purchase_price|floatformat:2 }}) exceeds selling price. Suggested: <strong>₱{{ suggested_price|floatformat:2 }}</strong></span>
+                </div>
+            </div>
+            <form method="post" action="{% url 'apply_suggested_price' product.id %}" class="m-0">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger btn-sm rounded-pill fw-semibold px-3">
+                    Apply ₱{{ suggested_price|floatformat:2 }}
+                </button>
+            </form>
+        </div>
+        {% elif product.is_low_margin %}
+        <div class="alert alert-warning shadow-sm border-warning rounded-4 mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2 p-3">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-exclamation-triangle-fill fs-4 text-warning"></i>
+                <div>
+                    <strong class="d-block">Low Margin Alert: {{ product.profit_margin_percentage }}% (Below {{ product.margin_threshold }}% target)</strong>
+                    <span class="small">Suggested retail price: <strong>₱{{ suggested_price|floatformat:2 }}</strong> to restore margin.</span>
+                </div>
+            </div>
+            <form method="post" action="{% url 'apply_suggested_price' product.id %}" class="m-0">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success btn-sm rounded-pill fw-semibold px-3">
+                    Apply ₱{{ suggested_price|floatformat:2 }}
+                </button>
+            </form>
+        </div>
+        {% endif %}
+
+        <!-- Two Top Summary Metric Cards -->
+        <div class="row g-3 mb-4">
+            <!-- Left Card: Average Cost -->
+            <div class="col-6">
+                <div class="p-3 p-md-4 rounded-4 h-100" style="background-color: #E6F7F7; border: 1px solid #CCFBF1;">
+                    <div class="text-secondary small fw-medium mb-1" style="color: #335C5D !important;">
+                        Average cost / {{ product.unit }}
+                    </div>
+                    <div class="display-6 fw-bold text-dark mb-0" style="color: #0F3738 !important; letter-spacing: -0.5px;">
+                        ₱{{ product.average_purchase_price|floatformat:2 }}
+                    </div>
+                </div>
+            </div>
+            <!-- Right Card: Selling Price -->
+            <div class="col-6">
+                <div class="p-3 p-md-4 rounded-4 h-100" style="background-color: #EAF8ED; border: 1px solid #DCFCE7;">
+                    <div class="text-secondary small fw-medium mb-1" style="color: #2B5C3B !important;">
+                        Selling price / {{ product.unit }}
+                    </div>
+                    <div class="display-6 fw-bold text-dark mb-0" style="color: #0F3738 !important; letter-spacing: -0.5px;">
+                        ₱{{ product.selling_price|floatformat:2 }}
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-</div>
-{% endif %}
 
-<!-- Chronological Price History Table -->
-<div class="card shadow-sm border-0 mb-4">
-    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-        <div>
-            <h5 class="mb-0 fw-bold text-dark">
-                <i class="bi bi-journal-text me-2 text-primary"></i>Purchasing Price History Timeline
-            </h5>
-            <small class="text-muted">{{ total_records }} price record(s) logged</small>
+        <!-- Action Buttons -->
+        <div class="row g-3 mb-4">
+            <div class="col-6">
+                <button type="button" class="btn w-100 py-3 rounded-4 fw-semibold text-white d-flex align-items-center justify-content-center gap-2 shadow-sm" style="background-color: #0F5C5C; font-size: 1.05rem;" data-bs-toggle="modal" data-bs-target="#purchaseModal">
+                    <i class="bi bi-plus-lg fs-5"></i> Purchase
+                </button>
+            </div>
+            <div class="col-6">
+                <button type="button" class="btn w-100 py-3 rounded-4 fw-semibold d-flex align-items-center justify-content-center gap-2" style="background-color: #E0F7F6; color: #0F5C5C; border: 1px solid #CCFBF1; font-size: 1.05rem;" data-bs-toggle="modal" data-bs-target="#adjustPriceModal">
+                    <i class="bi bi-graph-up-arrow fs-5"></i> Adjust price
+                </button>
+            </div>
         </div>
-        <a class="btn btn-warning btn-sm text-dark fw-semibold" href="{% url 'product_price_record_create' product.id %}">
-            <i class="bi bi-plus-lg me-1"></i>Record Price Shift
-        </a>
-    </div>
-    {% if price_records %}
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Effective Date</th>
-                    <th>Supplier Cost</th>
-                    <th>Cost Shift</th>
-                    <th>Retail Selling Price</th>
-                    <th>Margin at Time</th>
-                    <th>Supplier / Wholesaler</th>
-                    <th>Notes</th>
-                    <th>Logged By</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for record in price_records %}
-                <tr>
-                    <td>{{ record.effective_date|date:"M d, Y" }}</td>
-                    <td><strong>₱{{ record.purchase_price|floatformat:2 }}</strong></td>
-                    <td>
-                        {% if record.previous_record %}
-                            {% if record.price_difference > 0 %}
-                                <span class="badge bg-danger">
-                                    <i class="bi bi-arrow-up-right me-1"></i>+₱{{ record.price_difference|floatformat:2 }} (+{{ record.percentage_change }}%)
-                                </span>
-                            {% elif record.price_difference < 0 %}
-                                <span class="badge bg-success">
-                                    <i class="bi bi-arrow-down-right me-1"></i>-₱{{ record.price_difference|stringformat:".2f"|slice:"1:" }} ({{ record.percentage_change }}%)
-                                </span>
-                            {% else %}
-                                <span class="badge bg-secondary">Same</span>
-                            {% endif %}
-                        {% else %}
-                            <span class="badge bg-info text-dark">Baseline Cost</span>
-                        {% endif %}
-                    </td>
-                    <td>₱{{ product.selling_price|floatformat:2 }}</td>
-                    <td>
-                        {% if record.profit_margin_at_recording < 0 %}
-                            <span class="badge bg-danger">{{ record.profit_margin_at_recording }}%</span>
-                        {% elif record.profit_margin_at_recording < product.margin_threshold %}
-                            <span class="badge bg-warning text-dark">{{ record.profit_margin_at_recording }}%</span>
-                        {% else %}
-                            <span class="badge bg-success">{{ record.profit_margin_at_recording }}%</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ record.supplier|default:"-" }}</td>
-                    <td class="small text-muted">{{ record.notes|default:"-" }}</td>
-                    <td class="small">{{ record.recorded_by.username|default:"System" }}</td>
-                    <td class="text-end">
-                        <div class="btn-group btn-group-sm">
-                            <a href="{% url 'price_record_update' record.id %}" class="btn btn-outline-secondary" title="Edit this record">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            <a href="{% url 'price_record_delete' record.id %}" class="btn btn-outline-danger" title="Delete this record">
-                                <i class="bi bi-trash"></i>
-                            </a>
+
+        <!-- Segmented Tab Control -->
+        <div class="p-1 rounded-4 mb-4" style="background-color: #F1F5F9;">
+            <ul class="nav nav-pills nav-fill" id="productOverviewTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active rounded-3 py-2 fw-semibold" id="compare-tab" data-bs-toggle="pill" data-bs-target="#compare-pane" type="button" role="tab" aria-controls="compare-pane" aria-selected="true" style="color: #0F5C5C;">
+                        Compare stores
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-3 py-2 fw-medium text-secondary" id="history-tab" data-bs-toggle="pill" data-bs-target="#history-pane" type="button" role="tab" aria-controls="history-pane" aria-selected="false">
+                        Purchase history
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="productOverviewTabContent">
+            <!-- TAB 1: COMPARE STORES -->
+            <div class="tab-pane fade show active" id="compare-pane" role="tabpanel" aria-labelledby="compare-tab" tabindex="0">
+                {% if supplier_comparison %}
+                    <div class="d-flex flex-column gap-3 mb-3">
+                        {% for item in supplier_comparison %}
+                        <div class="card border-2 rounded-4 p-3 shadow-none transition-all" style="{% if item.is_lowest %}background-color: #F0FDF4; border-color: #86EFAC !important;{% else %}background-color: #FFFFFF; border-color: #E2E8F0 !important;{% endif %}">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <!-- Left: Store Info -->
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" style="background-color: #E6F7F7; width: 46px; height: 46px; color: #0F5C5C;">
+                                        <i class="bi bi-shop fs-5"></i>
+                                    </div>
+                                    <div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="fw-bold text-dark fs-5">{{ item.name }}</span>
+                                            {% if item.is_lowest %}
+                                                <span class="badge rounded-pill fw-bold" style="background-color: #DCFCE7; color: #15803D; font-size: 10px; letter-spacing: 0.5px; padding: 4px 8px;">LOWEST</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-muted small mt-1">
+                                            {{ item.latest_date|date:"M d, Y" }}
+                                            {% if not item.is_lowest and item.difference_from_lowest > 0 %}
+                                                &bull; <span class="text-danger">+₱{{ item.difference_from_lowest|floatformat:2 }} vs lowest</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Right: Price -->
+                                <div class="text-end">
+                                    <div class="fw-bold fs-4 text-dark mb-0" style="letter-spacing: -0.5px;">
+                                        ₱{{ item.latest_price|floatformat:2 }}
+                                    </div>
+                                    <div class="text-muted small">
+                                        per {{ product.unit }}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-5 bg-white rounded-4 border p-4 mb-3">
+                        <i class="bi bi-shop fs-1 text-muted"></i>
+                        <h5 class="mt-3 fw-bold">No Supplier Comparison Yet</h5>
+                        <p class="text-muted small mb-3">Record purchases from your wholesalers (e.g. Puregold, Gaisano, Super 8) to compare who offers the best price.</p>
+                        <button class="btn btn-teal btn-sm" data-bs-toggle="modal" data-bs-target="#purchaseModal">
+                            <i class="bi bi-plus-lg me-1"></i>Record First Store Purchase
+                        </button>
+                    </div>
+                {% endif %}
+
+                <!-- Footer Note & Calculation Accordion -->
+                <p class="text-muted small mb-3" style="font-size: 0.825rem;">
+                    Latest prices from your records, not live store prices.
+                </p>
+
+                <div class="accordion accordion-flush mb-4" id="costCalculationAccordion">
+                    <div class="accordion-item bg-transparent border-0">
+                        <h2 class="accordion-header" id="headingOne">
+                            <button class="accordion-button collapsed bg-transparent p-0 shadow-none text-teal fw-semibold small" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne" style="color: #0F5C5C !important;">
+                                <i class="bi bi-caret-right-fill me-1 small"></i> How your average cost is calculated
+                            </button>
+                        </h2>
+                        <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#costCalculationAccordion">
+                            <div class="accordion-body p-3 mt-2 rounded-3 small bg-white border text-secondary">
+                                Average cost is calculated by taking the sum of all purchasing costs recorded for <strong>{{ product.name }}</strong> divided by the total number of units/packs purchased:
+                                <div class="p-2 bg-light rounded mt-2 font-monospace">
+                                    ₱{{ product.total_purchase_spend|floatformat:2 }} (Total Spend) &divide; {{ product.total_units_purchased }} {{ product.unit }}{% if product.total_units_purchased != 1 %}s{% endif %} = <strong>₱{{ product.average_purchase_price|floatformat:2 }}</strong> per {{ product.unit }}.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: PURCHASE HISTORY -->
+            <div class="tab-pane fade" id="history-pane" role="tabpanel" aria-labelledby="history-tab" tabindex="0">
+                <div class="card border rounded-4 overflow-hidden shadow-none mb-4">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <span class="fw-bold text-dark small text-uppercase">Recorded Purchase History</span>
+                        <button class="btn btn-sm btn-teal" data-bs-toggle="modal" data-bs-target="#purchaseModal">
+                            <i class="bi bi-plus-lg me-1"></i>Add Purchase
+                        </button>
+                    </div>
+                    {% if price_records %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Supplier</th>
+                                    <th>Cost / Unit</th>
+                                    <th>Quantity</th>
+                                    <th>Cost Shift</th>
+                                    <th>Margin</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for r in price_records %}
+                                <tr>
+                                    <td>{{ r.effective_date|date:"M d, Y" }}</td>
+                                    <td><strong class="text-dark">{{ r.supplier|default:"-" }}</strong></td>
+                                    <td><strong>₱{{ r.purchase_price|floatformat:2 }}</strong></td>
+                                    <td>{{ r.quantity }} {{ product.unit }}{% if r.quantity != 1 %}s{% endif %}</td>
+                                    <td>
+                                        {% if r.previous_record %}
+                                            {% if r.price_difference > 0 %}
+                                                <span class="badge bg-danger">+₱{{ r.price_difference|floatformat:2 }} (+{{ r.percentage_change }}%)</span>
+                                            {% elif r.price_difference < 0 %}
+                                                <span class="badge bg-success">-₱{{ r.price_difference|stringformat:".2f"|slice:"1:" }} ({{ r.percentage_change }}%)</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">No change</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-light text-dark border">Initial</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if r.profit_margin_at_recording < 0 %}
+                                            <span class="badge bg-danger">{{ r.profit_margin_at_recording }}%</span>
+                                        {% elif r.profit_margin_at_recording < product.margin_threshold %}
+                                            <span class="badge bg-warning text-dark">{{ r.profit_margin_at_recording }}%</span>
+                                        {% else %}
+                                            <span class="badge bg-success">{{ r.profit_margin_at_recording }}%</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'price_record_update' r.id %}" class="btn btn-outline-secondary" title="Edit">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <a href="{% url 'price_record_delete' r.id %}" class="btn btn-outline-danger" title="Delete">
+                                                <i class="bi bi-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="card-body text-center py-4 text-muted">
+                        No purchase history records found.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     </div>
-    {% else %}
-    <div class="card-body text-center py-4 text-muted">
-        No price records found.
+</div>
+
+<!-- MODAL: + Purchase (Record New Cost / Supplier) -->
+<div class="modal fade" id="purchaseModal" tabindex="-1" aria-labelledby="purchaseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom py-3">
+                <h5 class="modal-title fw-bold text-dark" id="purchaseModalLabel">
+                    <i class="bi bi-plus-circle me-1 text-teal"></i> Record Purchase for {{ product.name }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'product_price_record_create' product.id %}">
+                {% csrf_token %}
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Supplier / Store Name <span class="text-danger">*</span></label>
+                        <input type="text" name="supplier" class="form-control" placeholder="e.g. Gaisano, Puregold, Ultra Mega, Local Market" required>
+                        <div class="form-text small">Enter where you purchased this batch so you can compare prices.</div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Cost per {{ product.unit }} (₱) <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">₱</span>
+                                <input type="number" step="0.01" min="0.01" name="purchase_price" class="form-control" value="{{ product.current_purchase_price }}" required>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Packs / Quantity</label>
+                            <input type="number" min="1" name="quantity" class="form-control" value="1" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Purchase Date</label>
+                        <input type="date" name="effective_date" class="form-control" value="{% now 'Y-m-d' %}">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Notes / Promo Details (Optional)</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="e.g. Bundled promo, price hike, wholesale discount"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-top p-3">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-teal rounded-pill px-4">Save Purchase</button>
+                </div>
+            </form>
+        </div>
     </div>
-    {% endif %}
+</div>
+
+<!-- MODAL: Adjust Selling Price -->
+<div class="modal fade" id="adjustPriceModal" tabindex="-1" aria-labelledby="adjustPriceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom py-3">
+                <h5 class="modal-title fw-bold text-dark" id="adjustPriceModalLabel">
+                    <i class="bi bi-graph-up-arrow me-1 text-teal"></i> Adjust Retail Price
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'adjust_selling_price' product.id %}">
+                {% csrf_token %}
+                <div class="modal-body p-4">
+                    <div class="alert alert-light border rounded-3 p-3 mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-secondary small">Current Purchasing Cost:</span>
+                            <strong>₱{{ product.current_purchase_price|floatformat:2 }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-secondary small">Current Retail Price:</span>
+                            <strong>₱{{ product.selling_price|floatformat:2 }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-secondary small">Suggested for {{ product.margin_threshold }}% margin:</span>
+                            <strong class="text-teal">₱{{ suggested_price|floatformat:2 }}</strong>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">New Retail Selling Price (₱) <span class="text-danger">*</span></label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text">₱</span>
+                            <input type="number" step="0.01" min="0.01" name="selling_price" class="form-control fw-bold" value="{{ product.selling_price }}" required>
+                        </div>
+                        <div class="form-text small">Price customers will pay for 1 {{ product.unit }}.</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top p-3">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-teal rounded-pill px-4">Update Price</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 {% endblock %}

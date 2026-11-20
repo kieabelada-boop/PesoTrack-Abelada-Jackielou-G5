@@ -11,7 +11,8 @@ from django.views.generic import (
 )
 from .forms import (
     ProductCreateForm, ProductUpdateForm,
-    PriceRecordForm, StandalonePriceRecordForm
+    PriceRecordForm, StandalonePriceRecordForm,
+    QuickAdjustPriceForm
 )
 from .models import Product, PriceRecord
 
@@ -104,6 +105,11 @@ class ProductDetailView(LoginRequiredMixin, DetailView):
         context['price_records'] = price_records
         context['total_records'] = len(price_records)
         context['suggested_price'] = product.suggested_selling_price
+        context['supplier_comparison'] = product.supplier_comparison
+        context['lowest_supplier'] = product.lowest_supplier
+        context['savings_per_unit'] = product.supplier_savings_per_unit
+        context['purchase_form'] = PriceRecordForm()
+        context['adjust_price_form'] = QuickAdjustPriceForm(instance=product)
         return context
 
 
@@ -118,6 +124,7 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
 
         # Create the initial PriceRecord from the form's extra fields
         initial_cost = form.cleaned_data['initial_purchase_price']
+        quantity = form.cleaned_data.get('quantity', 1)
         effective_date = form.cleaned_data.get('effective_date')
         supplier = form.cleaned_data.get('supplier', '')
         notes = form.cleaned_data.get('notes', '')
@@ -126,6 +133,7 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
             product=product,
             recorded_by=self.request.user,
             purchase_price=initial_cost,
+            quantity=quantity,
             effective_date=effective_date,
             supplier=supplier,
             notes=notes or "Initial purchase price recorded at product creation."
@@ -388,3 +396,75 @@ class ApplySuggestedPriceView(LoginRequiredMixin, View):
             f"Profit margin successfully restored to {product.profit_margin_percentage:.2f}%!"
         )
         return redirect(request.META.get('HTTP_REFERER', reverse('product_detail', kwargs={'pk': product.pk})))
+
+
+class AdjustSellingPriceView(LoginRequiredMixin, View):
+    """Adjust retail selling price directly from Product Overview page."""
+    def post(self, request, pk):
+        user = request.user
+        if user.role == 'ADMIN':
+            product = get_object_or_404(Product, pk=pk)
+        else:
+            product = get_object_or_404(Product, pk=pk, user=user)
+
+        form = QuickAdjustPriceForm(request.POST, instance=product)
+        if form.is_valid():
+            old_price = product.selling_price
+            product = form.save()
+            messages.success(
+                request,
+                f"Retail selling price for '{product.name}' adjusted to ₱{product.selling_price:.2f}. "
+                f"Current profit margin: {product.profit_margin_percentage:.2f}%."
+            )
+        else:
+            messages.error(request, "Invalid selling price entered. Please enter a valid amount greater than ₱0.00.")
+        return redirect(reverse('product_detail', kwargs={'pk': product.pk}))
+
+
+class SupplierComparisonView(LoginRequiredMixin, ListView):
+    """
+    Catalog-wide feature comparing purchasing prices across different suppliers.
+    Allows resellers to see where each product is cheapest and find bulk savings.
+    """
+    model = Product
+    template_name = "products/compare_suppliers.html"
+    context_object_name = "products"
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'ADMIN' and self.request.GET.get('view_all') == 'true':
+            qs = Product.objects.all().prefetch_related('price_records')
+        else:
+            qs = Product.objects.filter(user=user).prefetch_related('price_records')
+        return qs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        all_prods = list(self.get_queryset())
+
+        compared_products = []
+        multi_supplier_count = 0
+        total_potential_savings = Decimal('0.00')
+        all_suppliers = set()
+
+        for p in all_prods:
+            comp = p.supplier_comparison
+            if comp:
+                for s in comp:
+                    all_suppliers.add(s['name'])
+                if len(comp) > 1:
+                    multi_supplier_count += 1
+                    total_potential_savings += p.supplier_savings_per_unit
+                compared_products.append({
+                    'product': p,
+                    'comparison': comp,
+                    'lowest': p.lowest_supplier,
+                    'savings': p.supplier_savings_per_unit,
+                    'has_multiple_suppliers': len(comp) > 1,
+                })
+
+        context['compared_products'] = compared_products
+        context['all_suppliers'] = sorted(list(all_suppliers))
+        context['multi_supplier_count'] = multi_supplier_count
+        context['total_potential_savings'] = total_potential_savings
+        return context

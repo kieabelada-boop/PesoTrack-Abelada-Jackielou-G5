@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Compare Stores & Suppliers - PesoTrack{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+    <div>
+        <h1 class="h2 mb-1 fw-bold text-dark">
+            <i class="bi bi-shop me-2 text-teal"></i>Compare Stores &amp; Wholesalers
+        </h1>
+        <p class="text-muted mb-0">Compare purchasing costs across different suppliers to find the lowest prices and maximize store profit</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-teal-light" href="{% url 'product_list' %}">
+            <i class="bi bi-boxes me-1"></i>Product Catalog
+        </a>
+        <a class="btn btn-teal" href="{% url 'price_record_create' %}">
+            <i class="bi bi-plus-lg me-1"></i>Record New Price
+        </a>
+    </div>
+</div>
+
+<!-- Supplier Metric Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-4">
+        <div class="card card-stat shadow-sm border-0 border-start border-4 h-100" style="border-color: #0F766E !important;">
+            <div class="card-body py-3">
+                <span class="text-muted small text-uppercase fw-semibold">Wholesalers Tracked</span>
+                <h3 class="fw-bold text-dark mb-0 mt-1">{{ all_suppliers|length }}</h3>
+                <div class="small text-muted mt-1">{{ all_suppliers|join:", "|default:"No suppliers recorded yet" }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4">
+        <div class="card card-stat shadow-sm border-0 border-start border-4 h-100" style="border-color: #10B981 !important;">
+            <div class="card-body py-3">
+                <span class="text-muted small text-uppercase fw-semibold">Items with Multi-Store Quotes</span>
+                <h3 class="fw-bold text-success mb-0 mt-1">{{ multi_supplier_count }}</h3>
+                <div class="small text-muted mt-1">Ready for price comparison</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card card-stat shadow-sm border-0 border-start border-4 h-100" style="border-color: #F59E0B !important;">
+            <div class="card-body py-3">
+                <span class="text-muted small text-uppercase fw-semibold">Total Unit Savings Potential</span>
+                <h3 class="fw-bold text-warning mb-0 mt-1">₱{{ total_potential_savings|floatformat:2 }}</h3>
+                <div class="small text-muted mt-1">Saved per unit by choosing the lowest supplier</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Products Supplier Comparison Cards -->
+{% if compared_products %}
+<div class="d-flex flex-column gap-4">
+    {% for item in compared_products %}
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <a href="{% url 'product_detail' item.product.id %}" class="h5 fw-bold text-dark text-decoration-none mb-0">
+                    {{ item.product.name }}
+                </a>
+                <span class="badge bg-light text-secondary border ms-2">{{ item.product.get_category_display }}</span>
+                <span class="badge bg-light text-secondary border">Per {{ item.product.unit }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="small text-muted">Retail Selling Price: <strong class="text-teal">₱{{ item.product.selling_price|floatformat:2 }}</strong></span>
+                <a href="{% url 'product_detail' item.product.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                    View Overview
+                </a>
+            </div>
+        </div>
+
+        <div class="card-body p-4">
+            {% if item.has_multiple_suppliers %}
+                <div class="alert alert-success bg-opacity-25 border-success rounded-3 p-2 px-3 mb-3 d-flex align-items-center gap-2 small">
+                    <i class="bi bi-lightbulb-fill text-success"></i>
+                    <div>
+                        <strong>Smart Shopping Tip:</strong> Buy at <strong>{{ item.lowest.name }}</strong> (₱{{ item.lowest.latest_price|floatformat:2 }}) to save <strong>₱{{ item.savings|floatformat:2 }}/{{ item.product.unit }}</strong> compared to other suppliers!
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="row g-3">
+                {% for store in item.comparison %}
+                <div class="col-12 col-md-6 col-lg-4">
+                    <div class="p-3 rounded-4 h-100 border-2" style="{% if store.is_lowest %}background-color: #F0FDF4; border: 1.5px solid #86EFAC;{% else %}background-color: #FFFFFF; border: 1.5px solid #E2E8F0;{% endif %}">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="rounded-3 p-2 d-flex align-items-center justify-content-center" style="background-color: #E6F7F7; width: 36px; height: 36px; color: #0F5C5C;">
+                                    <i class="bi bi-shop"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-0 text-dark">{{ store.name }}</h6>
+                                    <small class="text-muted">{{ store.latest_date|date:"M d, Y" }}</small>
+                                </div>
+                            </div>
+                            {% if store.is_lowest %}
+                                <span class="badge rounded-pill fw-bold" style="background-color: #DCFCE7; color: #15803D; font-size: 10px;">LOWEST</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-end mt-3 pt-2 border-top">
+                            <div>
+                                <span class="text-muted small">Wholesale Cost:</span>
+                                <div class="fs-4 fw-bold text-dark">₱{{ store.latest_price|floatformat:2 }}</div>
+                            </div>
+                            <div class="text-end">
+                                <span class="text-muted small">Profit Margin:</span>
+                                <div>
+                                    {% if store.margin_at_cost < 0 %}
+                                        <span class="badge bg-danger">{{ store.margin_at_cost }}%</span>
+                                    {% elif store.margin_at_cost < item.product.margin_threshold %}
+                                        <span class="badge bg-warning text-dark">{{ store.margin_at_cost }}%</span>
+                                    {% else %}
+                                        <span class="badge bg-success">{{ store.margin_at_cost }}%</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if not store.is_lowest and store.difference_from_lowest > 0 %}
+                            <div class="text-danger small mt-2">
+                                <i class="bi bi-arrow-up-right me-1"></i>+₱{{ store.difference_from_lowest|floatformat:2 }} vs lowest
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+
+                <div class="col-12 col-md-6 col-lg-4">
+                    <div class="p-3 rounded-4 h-100 d-flex flex-column align-items-center justify-content-center border-dashed text-center" style="border: 2px dashed #CBD5E1; min-height: 140px;">
+                        <span class="text-muted small mb-2">Check another store?</span>
+                        <a href="{% url 'product_price_record_create' item.product.id %}" class="btn btn-sm btn-outline-teal rounded-pill px-3">
+                            <i class="bi bi-plus-lg me-1"></i>Add Store Price
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card shadow-sm border-0 rounded-4 text-center py-5">
+    <div class="card-body">
+        <i class="bi bi-shop fs-1 text-muted"></i>
+        <h5 class="mt-3 fw-bold">No Products or Suppliers to Compare</h5>
+        <p class="text-muted">Start adding products and logging purchases from different stores to see price comparisons.</p>
+        <a href="{% url 'product_create' %}" class="btn btn-teal">
+            <i class="bi bi-plus-lg me-1"></i>Add Product
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
