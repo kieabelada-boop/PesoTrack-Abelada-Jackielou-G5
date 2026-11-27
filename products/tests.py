@@ -493,3 +493,287 @@ class CoreFeatureViewsAndCRUDTests(TestCase):
         self.assertContains(resp, "Gaisano")
         self.assertContains(resp, "Puregold")
         self.assertContains(resp, "1.50")  # Savings per unit: 12.50 - 11.00 = 1.50
+
+
+class CoreFeatureHardeningAndSecurityTests(TestCase):
+    """
+    Project Development 3: Hardening, Security, and Validation Test Suite.
+    Includes comprehensive tests for:
+    1. Valid input
+    2. Invalid input (prices, quantities, future dates, thresholds, duplicates)
+    3. Login required across all core feature endpoints
+    4. Blocked access / isolation between user accounts (404 enforcement)
+    5. Role separation (Admin redirected away from reseller product management)
+    6. Custom error page rendering
+    """
+    def setUp(self):
+        self.client = Client()
+        self.owner1 = User.objects.create_user(
+            username='sari_owner_alpha',
+            email='alpha@store.ph',
+            password='Password123!',
+            role='RESELLER',
+            business_name="Alpha Mini Mart"
+        )
+        self.owner2 = User.objects.create_user(
+            username='sari_owner_beta',
+            email='beta@store.ph',
+            password='Password123!',
+            role='RESELLER',
+            business_name="Beta Corner Store"
+        )
+        self.admin = User.objects.create_user(
+            username='system_admin',
+            email='admin@pesotrack.ph',
+            password='Password123!',
+            role='ADMIN'
+        )
+
+    # 1. VALID INPUT TEST
+    def test_valid_input_creates_product_and_initial_price_record(self):
+        """Valid input successfully creates product, initial price record, and calculates margin."""
+        self.client.login(username='sari_owner_alpha', password='Password123!')
+        create_url = reverse('product_create')
+        valid_data = {
+            'name': 'San Miguel Pale Pilsen 330ml',
+            'category': 'beverages',
+            'unit': 'bottle',
+            'selling_price': '65.00',
+            'margin_threshold': '15.00',
+            'initial_purchase_price': '52.00',
+            'quantity': '24',
+            'effective_date': timezone.now().date().isoformat(),
+            'supplier': 'SMB Direct Wholesaler',
+            'notes': 'Case of 24 bottles',
+            'sku': 'SMB-330',
+            'description': 'Filipino lager beer'
+        }
+        response = self.client.post(create_url, valid_data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        # Verified in database
+        product = Product.objects.get(name='San Miguel Pale Pilsen 330ml', user=self.owner1)
+        self.assertEqual(product.selling_price, Decimal('65.00'))
+        self.assertEqual(product.current_purchase_price, Decimal('52.00'))
+        self.assertEqual(product.total_units_purchased, 24)
+        # Margin: (65 - 52) / 65 * 100 = 20.00% >= 15.00% threshold
+        self.assertEqual(product.profit_margin_percentage, Decimal('20.00'))
+        self.assertFalse(product.is_low_margin)
+        self.assertEqual(product.price_records.count(), 1)
+
+    # 2. INVALID INPUT TESTS
+    def test_invalid_input_negative_or_zero_selling_price(self):
+        """Server-side validation rejects zero or negative selling price."""
+        self.client.login(username='sari_owner_alpha', password='Password123!')
+        bad_data = {
+            'name': 'Invalid Price Product',
+            'category': 'general',
+            'unit': 'piece',
+            'selling_price': '0.00',  # Invalid!
+            'margin_threshold': '15.00',
+            'initial_purchase_price': '10.00',
+            'effective_date': timezone.now().date().isoformat(),
+        }
+        response = self.client.post(reverse('product_create'), bad_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response.context['form'], 'selling_price', 'Selling price must be greater than ₱0.00.')
+        self.assertFalse(Product.objects.filter(name='Invalid Price Product').exists())
+
+    def test_invalid_input_negative_or_zero_purchase_cost(self):
+        """Server-side validation rejects zero or negative purchasing price."""
+        self.client.login(username='sari_owner_alpha', password='Password123!')
+        bad_data = {
+            'name': 'Free Cost Item',
+            'category': 'general',
+            'unit': 'piece',
+            'selling_price': '25.00',
+            'margin_threshold': '15.00',
+            'initial_purchase_price': '-5.00',  # Invalid!
+            'effective_date': timezone.now().date().isoformat(),
+        }
+        response = self.client.post(reverse('product_create'), bad_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Product.objects.filter(name='Free Cost Item').exists())
+
+    def test_invalid_input_future_purchase_date(self):
+        """Server-side validation rejects purchasing dates set in the future."""
+        self.client.login(username='sari_owner_alpha', password='Password123!')
+        future_date = (timezone.now() + timezone.timedelta(days=10)).date().isoformat()
+        bad_data = {
+            'name': 'Time Machine Biscuit',
+            'category': 'snacks',
+            'unit': 'pack',
+            'selling_price': '20.00',
+            'margin_threshold': '15.00',
+            'initial_purchase_price': '15.00',
+            'effective_date': future_date,  # Invalid future date!
+        }
+        response = self.client.post(reverse('product_create'), bad_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response.context['form'], 'effective_date', 'Purchase date cannot be in the future.')
+        self.assertFalse(Product.objects.filter(name='Time Machine Biscuit').exists())
+
+    def test_invalid_input_out_of_range_margin_threshold(self):
+        """Server-side validation rejects profit margin threshold greater than 100% or negative."""
+        self.client.login(username='sari_owner_alpha', password='Password123!')
+        bad_data = {
+            'name': 'Extreme Margin Item',
+            'category': 'snacks',
+            'unit': 'pack',
+            'selling_price': '20.00',
+            'margin_threshold': '150.00',  # Greater than 100%!
+            'initial_purchase_price': '10.00',
+            'effective_date': timezone.now().date().isoformat(),
+        }
+        response = self.client.post(reverse('product_create'), bad_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response.context['form'], 'margin_threshold', 'Margin threshold must be between 0% and 100%.')
+        self.assertFalse(Product.objects.filter(name='Extreme Margin Item').exists())
+
+    def test_invalid_input_duplicate_product_name_for_same_user(self):
+        """Server-side validation prevents creating duplicate product names for the same store owner."""
+        Product.objects.create(
+            user=self.owner1,
+            name="Century Tuna Flakes in Oil 155g",
+            category="canned_goods",
+            unit="can",
+            selling_price=Decimal('38.00'),
+            margin_threshold=Decimal('15.00')
+        )
+
+        self.client.login(username='sari_owner_alpha', password='Password123!')
+        duplicate_data = {
+            'name': 'Century Tuna Flakes in Oil 155g',  # Duplicate!
+            'category': 'canned_goods',
+            'unit': 'can',
+            'selling_price': '40.00',
+            'margin_threshold': '15.00',
+            'initial_purchase_price': '30.00',
+            'effective_date': timezone.now().date().isoformat(),
+        }
+        response = self.client.post(reverse('product_create'), duplicate_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(
+            response.context['form'],
+            'name',
+            "You already have a product named 'Century Tuna Flakes in Oil 155g' in your store inventory."
+        )
+
+    # 3. LOGIN REQUIRED TESTS
+    def test_login_required_on_all_core_views(self):
+        """Logged-out users are redirected to login on all core feature routes."""
+        test_product = Product.objects.create(
+            user=self.owner1,
+            name="Protected Product",
+            category="general",
+            unit="piece",
+            selling_price=Decimal('10.00'),
+            margin_threshold=Decimal('10.00')
+        )
+        urls_to_test = [
+            reverse('product_list'),
+            reverse('product_create'),
+            reverse('product_detail', kwargs={'pk': test_product.pk}),
+            reverse('product_update', kwargs={'pk': test_product.pk}),
+            reverse('product_delete', kwargs={'pk': test_product.pk}),
+            reverse('product_price_record_create', kwargs={'product_id': test_product.pk}),
+            reverse('price_record_create'),
+            reverse('price_history'),
+            reverse('compare_suppliers'),
+        ]
+        for url in urls_to_test:
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 302, f"URL {url} did not redirect anonymous user.")
+            self.assertIn(reverse('login'), resp.url)
+
+    # 4. BLOCKED ACCESS TO ANOTHER USER'S RECORD
+    def test_blocked_access_to_another_users_record(self):
+        """A user cannot view, edit, delete, or modify another user's product or price record by ID (returns 404)."""
+        beta_product = Product.objects.create(
+            user=self.owner2,
+            name="Beta Exclusive Soda",
+            category="beverages",
+            unit="bottle",
+            selling_price=Decimal('25.00'),
+            margin_threshold=Decimal('15.00')
+        )
+        beta_record = PriceRecord.objects.create(
+            product=beta_product,
+            recorded_by=self.owner2,
+            purchase_price=Decimal('18.00'),
+            quantity=10,
+            effective_date=timezone.now().date()
+        )
+
+        # Log in as Owner 1 (Alpha)
+        self.client.login(username='sari_owner_alpha', password='Password123!')
+
+        # 1. Detail view of beta's product returns 404
+        self.assertEqual(
+            self.client.get(reverse('product_detail', kwargs={'pk': beta_product.pk})).status_code,
+            404
+        )
+
+        # 2. Update view of beta's product returns 404
+        self.assertEqual(
+            self.client.get(reverse('product_update', kwargs={'pk': beta_product.pk})).status_code,
+            404
+        )
+        self.assertEqual(
+            self.client.post(reverse('product_update', kwargs={'pk': beta_product.pk}), {'name': 'Hacked'}).status_code,
+            404
+        )
+
+        # 3. Delete view of beta's product returns 404
+        self.assertEqual(
+            self.client.post(reverse('product_delete', kwargs={'pk': beta_product.pk})).status_code,
+            404
+        )
+
+        # 4. Adding price record to beta's product returns 404
+        self.assertEqual(
+            self.client.post(
+                reverse('product_price_record_create', kwargs={'product_id': beta_product.pk}),
+                {'purchase_price': '10.00', 'quantity': 1, 'effective_date': timezone.now().date().isoformat()}
+            ).status_code,
+            404
+        )
+
+        # 5. Editing or deleting beta's price record returns 404
+        self.assertEqual(
+            self.client.get(reverse('price_record_update', kwargs={'pk': beta_record.pk})).status_code,
+            404
+        )
+        self.assertEqual(
+            self.client.post(reverse('price_record_delete', kwargs={'pk': beta_record.pk})).status_code,
+            404
+        )
+
+        # 6. Adjusting selling price on beta's product returns 404
+        self.assertEqual(
+            self.client.post(reverse('adjust_selling_price', kwargs={'pk': beta_product.pk}), {'selling_price': '99.00'}).status_code,
+            404
+        )
+
+        # Verify beta's product and record remain completely untouched
+        beta_product.refresh_from_db()
+        self.assertEqual(beta_product.name, "Beta Exclusive Soda")
+        self.assertEqual(beta_product.selling_price, Decimal('25.00'))
+
+    # 5. ROLE ACCESS CONTROL
+    def test_admin_redirected_away_from_reseller_product_views(self):
+        """Admin users attempting to access reseller product management views are redirected to admin dashboard."""
+        self.client.login(username='system_admin', password='Password123!')
+        resp = self.client.get(reverse('product_create'), follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertRedirects(resp, reverse('admin_dashboard'))
+        self.assertContains(resp, "exclusive to small reseller accounts")
+
+    # 6. CUSTOM 404 PAGE
+    def test_custom_404_template_rendered(self):
+        """Invalid URL returns 404 status and renders custom branded 404.html template."""
+        self.client.login(username='sari_owner_alpha', password='Password123!')
+        response = self.client.get('/products/999999/does-not-exist/')
+        self.assertEqual(response.status_code, 404)
+        self.assertTemplateUsed(response, '404.html')
+        self.assertContains(response, 'Record or Page Not Found', status_code=404)
