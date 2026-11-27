@@ -62,26 +62,43 @@ class ProductCreateForm(forms.ModelForm):
             'unit': "e.g. piece, pack, bottle, can, sachet, box, kg",
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user or kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        self.fields['effective_date'].initial = timezone.now().date()
+        if not self.initial.get('effective_date'):
+            today = timezone.localdate() if hasattr(timezone, 'localdate') else timezone.now().date()
+            self.fields['effective_date'].initial = today
         add_bootstrap_classes(self)
+
+    def clean_name(self):
+        name = self.cleaned_data.get('name', '').strip()
+        if len(name) < 2:
+            raise forms.ValidationError("Product name must be at least 2 characters long.")
+        if self.user and Product.objects.filter(user=self.user, name__iexact=name).exists():
+            raise forms.ValidationError(f"You already have a product named '{name}' in your store inventory.")
+        return name
+
+    def clean_unit(self):
+        unit = self.cleaned_data.get('unit', '').strip()
+        if not unit:
+            return 'piece'
+        return unit
 
     def clean_selling_price(self):
         price = self.cleaned_data.get('selling_price')
-        if price is not None and price <= 0:
+        if price is not None and price <= Decimal('0.00'):
             raise forms.ValidationError("Selling price must be greater than ₱0.00.")
         return price
 
     def clean_margin_threshold(self):
         threshold = self.cleaned_data.get('margin_threshold')
-        if threshold is not None and (threshold < 0 or threshold > 100):
+        if threshold is not None and (threshold < Decimal('0.00') or threshold > Decimal('100.00')):
             raise forms.ValidationError("Margin threshold must be between 0% and 100%.")
         return threshold
 
     def clean_initial_purchase_price(self):
         cost = self.cleaned_data.get('initial_purchase_price')
-        if cost is not None and cost <= 0:
+        if cost is not None and cost <= Decimal('0.00'):
             raise forms.ValidationError("Purchasing price must be greater than ₱0.00.")
         return cost
 
@@ -90,6 +107,16 @@ class ProductCreateForm(forms.ModelForm):
         if not qty or qty < 1:
             return 1
         return qty
+
+    def clean_effective_date(self):
+        dt = self.cleaned_data.get('effective_date')
+        today = timezone.localdate() if hasattr(timezone, 'localdate') else timezone.now().date()
+        if dt and dt > today:
+            raise forms.ValidationError("Purchase date cannot be in the future.")
+        return dt
+
+    def clean_supplier(self):
+        return (self.cleaned_data.get('supplier') or '').strip()
 
 
 class ProductUpdateForm(forms.ModelForm):
@@ -113,15 +140,33 @@ class ProductUpdateForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         add_bootstrap_classes(self)
 
+    def clean_name(self):
+        name = self.cleaned_data.get('name', '').strip()
+        if len(name) < 2:
+            raise forms.ValidationError("Product name must be at least 2 characters long.")
+        if self.instance and self.instance.user:
+            qs = Product.objects.filter(user=self.instance.user, name__iexact=name)
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise forms.ValidationError(f"Another product named '{name}' already exists in your store inventory.")
+        return name
+
+    def clean_unit(self):
+        unit = self.cleaned_data.get('unit', '').strip()
+        if not unit:
+            return 'piece'
+        return unit
+
     def clean_selling_price(self):
         price = self.cleaned_data.get('selling_price')
-        if price is not None and price <= 0:
+        if price is not None and price <= Decimal('0.00'):
             raise forms.ValidationError("Selling price must be greater than ₱0.00.")
         return price
 
     def clean_margin_threshold(self):
         threshold = self.cleaned_data.get('margin_threshold')
-        if threshold is not None and (threshold < 0 or threshold > 100):
+        if threshold is not None and (threshold < Decimal('0.00') or threshold > Decimal('100.00')):
             raise forms.ValidationError("Margin threshold must be between 0% and 100%.")
         return threshold
 
@@ -151,7 +196,8 @@ class PriceRecordForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not self.initial.get('effective_date'):
-            self.fields['effective_date'].initial = timezone.now().date()
+            today = timezone.localdate() if hasattr(timezone, 'localdate') else timezone.now().date()
+            self.fields['effective_date'].initial = today
         if not self.initial.get('quantity'):
             self.fields['quantity'].initial = 1
         self.fields['quantity'].required = False
@@ -159,7 +205,7 @@ class PriceRecordForm(forms.ModelForm):
 
     def clean_purchase_price(self):
         price = self.cleaned_data.get('purchase_price')
-        if price is not None and price <= 0:
+        if price is not None and price <= Decimal('0.00'):
             raise forms.ValidationError("Purchasing price must be greater than ₱0.00.")
         return price
 
@@ -168,6 +214,16 @@ class PriceRecordForm(forms.ModelForm):
         if not qty or qty < 1:
             return 1
         return qty
+
+    def clean_effective_date(self):
+        dt = self.cleaned_data.get('effective_date')
+        today = timezone.localdate() if hasattr(timezone, 'localdate') else timezone.now().date()
+        if dt and dt > today:
+            raise forms.ValidationError("Purchase date cannot be in the future.")
+        return dt
+
+    def clean_supplier(self):
+        return (self.cleaned_data.get('supplier') or '').strip()
 
 
 class StandalonePriceRecordForm(forms.ModelForm):
@@ -192,7 +248,8 @@ class StandalonePriceRecordForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['product'].queryset = Product.objects.filter(user=user).order_by('name')
         if not self.initial.get('effective_date'):
-            self.fields['effective_date'].initial = timezone.now().date()
+            today = timezone.localdate() if hasattr(timezone, 'localdate') else timezone.now().date()
+            self.fields['effective_date'].initial = today
         if not self.initial.get('quantity'):
             self.fields['quantity'].initial = 1
         self.fields['quantity'].required = False
@@ -200,7 +257,7 @@ class StandalonePriceRecordForm(forms.ModelForm):
 
     def clean_purchase_price(self):
         price = self.cleaned_data.get('purchase_price')
-        if price is not None and price <= 0:
+        if price is not None and price <= Decimal('0.00'):
             raise forms.ValidationError("Purchasing price must be greater than ₱0.00.")
         return price
 
@@ -209,6 +266,16 @@ class StandalonePriceRecordForm(forms.ModelForm):
         if not qty or qty < 1:
             return 1
         return qty
+
+    def clean_effective_date(self):
+        dt = self.cleaned_data.get('effective_date')
+        today = timezone.localdate() if hasattr(timezone, 'localdate') else timezone.now().date()
+        if dt and dt > today:
+            raise forms.ValidationError("Purchase date cannot be in the future.")
+        return dt
+
+    def clean_supplier(self):
+        return (self.cleaned_data.get('supplier') or '').strip()
 
 
 class QuickAdjustPriceForm(forms.ModelForm):
@@ -226,6 +293,6 @@ class QuickAdjustPriceForm(forms.ModelForm):
 
     def clean_selling_price(self):
         price = self.cleaned_data.get('selling_price')
-        if price is not None and price <= 0:
+        if price is not None and price <= Decimal('0.00'):
             raise forms.ValidationError("Selling price must be greater than ₱0.00.")
         return price

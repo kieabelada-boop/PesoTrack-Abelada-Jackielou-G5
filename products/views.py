@@ -2,6 +2,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -17,18 +18,25 @@ from .forms import (
 from .models import Product, PriceRecord
 
 
-class ProductListView(LoginRequiredMixin, ListView):
+class ResellerRequiredMixin:
+    """Ensures that product operations are restricted to small reseller accounts."""
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect(f"{reverse('login')}?next={request.path}")
+        if request.user.role == 'ADMIN' and not request.user.is_superuser:
+            messages.info(request, "Product inventory features are exclusive to small reseller accounts.")
+            return redirect('admin_dashboard')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class ProductListView(LoginRequiredMixin, ResellerRequiredMixin, ListView):
     model = Product
     template_name = "products/product_list.html"
     context_object_name = "products"
 
     def get_queryset(self):
-        # Users only see their own products; Admin can see all or own
-        user = self.request.user
-        if user.role == 'ADMIN' and self.request.GET.get('view_all') == 'true':
-            qs = Product.objects.all().select_related('user')
-        else:
-            qs = Product.objects.filter(user=user)
+        # Users strictly see only their own products
+        qs = Product.objects.filter(user=self.request.user)
 
         # Search filter
         query = self.request.GET.get('q', '').strip()
@@ -86,16 +94,14 @@ class ProductListView(LoginRequiredMixin, ListView):
         return context
 
 
-class ProductDetailView(LoginRequiredMixin, DetailView):
+class ProductDetailView(LoginRequiredMixin, ResellerRequiredMixin, DetailView):
     model = Product
     template_name = "products/product_detail.html"
     context_object_name = "product"
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'ADMIN':
-            return Product.objects.all().select_related('user')
-        return Product.objects.filter(user=user)
+        # Strict user isolation: 404 raised if accessing another user's product
+        return Product.objects.filter(user=self.request.user)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -113,16 +119,22 @@ class ProductDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class ProductCreateView(LoginRequiredMixin, CreateView):
+class ProductCreateView(LoginRequiredMixin, ResellerRequiredMixin, CreateView):
     model = Product
     form_class = ProductCreateForm
     template_name = "products/product_form.html"
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    @transaction.atomic
     def form_valid(self, form):
         form.instance.user = self.request.user
         product = form.save()
 
-        # Create the initial PriceRecord from the form's extra fields
+        # Create the initial PriceRecord atomically from form's extra fields
         initial_cost = form.cleaned_data['initial_purchase_price']
         quantity = form.cleaned_data.get('quantity', 1)
         effective_date = form.cleaned_data.get('effective_date')
@@ -162,17 +174,16 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
         return redirect(reverse('product_detail', kwargs={'pk': product.pk}))
 
 
-class ProductUpdateView(LoginRequiredMixin, UpdateView):
+class ProductUpdateView(LoginRequiredMixin, ResellerRequiredMixin, UpdateView):
     model = Product
     form_class = ProductUpdateForm
     template_name = "products/product_form.html"
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'ADMIN':
-            return Product.objects.all()
-        return Product.objects.filter(user=user)
+        # Strict user isolation: 404 raised if accessing another user's product
+        return Product.objects.filter(user=self.request.user)
 
+    @transaction.atomic
     def form_valid(self, form):
         product = form.save()
         margin = product.profit_margin_percentage
@@ -195,17 +206,16 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
         return redirect(reverse('product_detail', kwargs={'pk': product.pk}))
 
 
-class ProductDeleteView(LoginRequiredMixin, DeleteView):
+class ProductDeleteView(LoginRequiredMixin, ResellerRequiredMixin, DeleteView):
     model = Product
     template_name = "products/product_confirm_delete.html"
     success_url = reverse_lazy('product_list')
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'ADMIN':
-            return Product.objects.all()
-        return Product.objects.filter(user=user)
+        # Strict user isolation: 404 raised if attempting to delete another user's product
+        return Product.objects.filter(user=self.request.user)
 
+    @transaction.atomic
     def post(self, request, *args, **kwargs):
         product = self.get_object()
         name = product.name
@@ -214,14 +224,12 @@ class ProductDeleteView(LoginRequiredMixin, DeleteView):
         return response
 
 
-class PriceRecordCreateView(LoginRequiredMixin, View):
+class PriceRecordCreateView(LoginRequiredMixin, ResellerRequiredMixin, View):
     template_name = "products/price_record_form.html"
 
     def get(self, request, product_id=None):
         if product_id:
-            product = get_object_or_404(Product, pk=product_id)
-            if product.user != request.user and request.user.role != 'ADMIN':
-                raise PermissionDenied("You do not own this product.")
+            product = get_object_or_404(Product, pk=product_id, user=request.user)
             form = PriceRecordForm()
             return render(request, self.template_name, {'form': form, 'product': product})
         else:
@@ -230,23 +238,26 @@ class PriceRecordCreateView(LoginRequiredMixin, View):
 
     def post(self, request, product_id=None):
         if product_id:
-            product = get_object_or_404(Product, pk=product_id)
-            if product.user != request.user and request.user.role != 'ADMIN':
-                raise PermissionDenied("You do not own this product.")
+            product = get_object_or_404(Product, pk=product_id, user=request.user)
             form = PriceRecordForm(request.POST)
             if form.is_valid():
-                record = form.save(commit=False)
-                record.product = product
-                record.recorded_by = request.user
-                return self._process_saved_record(request, product, record)
+                with transaction.atomic():
+                    record = form.save(commit=False)
+                    record.product = product
+                    record.recorded_by = request.user
+                    return self._process_saved_record(request, product, record)
             return render(request, self.template_name, {'form': form, 'product': product})
         else:
             form = StandalonePriceRecordForm(request.user, request.POST)
             if form.is_valid():
-                record = form.save(commit=False)
-                record.recorded_by = request.user
-                product = record.product
-                return self._process_saved_record(request, product, record)
+                with transaction.atomic():
+                    record = form.save(commit=False)
+                    record.recorded_by = request.user
+                    product = record.product
+                    # Ensure the selected product is actually owned by the current user
+                    if product.user != request.user:
+                        raise PermissionDenied("You do not have permission to log prices for this product.")
+                    return self._process_saved_record(request, product, record)
             return render(request, self.template_name, {'form': form, 'product': None})
 
     def _process_saved_record(self, request, product, record):
@@ -299,16 +310,14 @@ class PriceRecordCreateView(LoginRequiredMixin, View):
         return redirect(reverse('product_detail', kwargs={'pk': product.pk}))
 
 
-class PriceRecordUpdateView(LoginRequiredMixin, UpdateView):
+class PriceRecordUpdateView(LoginRequiredMixin, ResellerRequiredMixin, UpdateView):
     model = PriceRecord
     form_class = PriceRecordForm
     template_name = "products/price_record_form.html"
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'ADMIN':
-            return PriceRecord.objects.all().select_related('product')
-        return PriceRecord.objects.filter(product__user=user).select_related('product')
+        # Strict user isolation
+        return PriceRecord.objects.filter(product__user=self.request.user).select_related('product')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -316,25 +325,25 @@ class PriceRecordUpdateView(LoginRequiredMixin, UpdateView):
         context['is_edit'] = True
         return context
 
+    @transaction.atomic
     def form_valid(self, form):
         record = form.save()
         messages.success(self.request, f"Price record for '{record.product.name}' updated successfully.")
         return redirect(reverse('product_detail', kwargs={'pk': record.product.pk}))
 
 
-class PriceRecordDeleteView(LoginRequiredMixin, DeleteView):
+class PriceRecordDeleteView(LoginRequiredMixin, ResellerRequiredMixin, DeleteView):
     model = PriceRecord
     template_name = "products/price_record_confirm_delete.html"
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'ADMIN':
-            return PriceRecord.objects.all().select_related('product')
-        return PriceRecord.objects.filter(product__user=user).select_related('product')
+        # Strict user isolation
+        return PriceRecord.objects.filter(product__user=self.request.user).select_related('product')
 
     def get_success_url(self):
         return reverse('product_detail', kwargs={'pk': self.object.product.pk})
 
+    @transaction.atomic
     def post(self, request, *args, **kwargs):
         record = self.get_object()
         product = record.product
@@ -343,17 +352,13 @@ class PriceRecordDeleteView(LoginRequiredMixin, DeleteView):
         return response
 
 
-class PriceHistoryListView(LoginRequiredMixin, ListView):
+class PriceHistoryListView(LoginRequiredMixin, ResellerRequiredMixin, ListView):
     model = PriceRecord
     template_name = "products/price_history.html"
     context_object_name = "price_records"
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'ADMIN' and self.request.GET.get('view_all') == 'true':
-            qs = PriceRecord.objects.all().select_related('product', 'product__user', 'recorded_by')
-        else:
-            qs = PriceRecord.objects.filter(product__user=user).select_related('product', 'recorded_by')
+        qs = PriceRecord.objects.filter(product__user=self.request.user).select_related('product', 'recorded_by')
 
         product_id = self.request.GET.get('product')
         if product_id:
@@ -367,24 +372,16 @@ class PriceHistoryListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user = self.request.user
-        if user.role == 'ADMIN' and self.request.GET.get('view_all') == 'true':
-            context['user_products'] = Product.objects.all().order_by('name')
-        else:
-            context['user_products'] = Product.objects.filter(user=user).order_by('name')
+        context['user_products'] = Product.objects.filter(user=self.request.user).order_by('name')
         context['selected_product'] = self.request.GET.get('product', '')
         return context
 
 
-class ApplySuggestedPriceView(LoginRequiredMixin, View):
+class ApplySuggestedPriceView(LoginRequiredMixin, ResellerRequiredMixin, View):
     """Allows one-click price adjustment to restore margin threshold."""
+    @transaction.atomic
     def post(self, request, pk):
-        user = request.user
-        if user.role == 'ADMIN':
-            product = get_object_or_404(Product, pk=pk)
-        else:
-            product = get_object_or_404(Product, pk=pk, user=user)
-
+        product = get_object_or_404(Product, pk=pk, user=request.user)
         suggested = product.suggested_selling_price
         old_selling = product.selling_price
         product.selling_price = suggested
@@ -398,18 +395,13 @@ class ApplySuggestedPriceView(LoginRequiredMixin, View):
         return redirect(request.META.get('HTTP_REFERER', reverse('product_detail', kwargs={'pk': product.pk})))
 
 
-class AdjustSellingPriceView(LoginRequiredMixin, View):
+class AdjustSellingPriceView(LoginRequiredMixin, ResellerRequiredMixin, View):
     """Adjust retail selling price directly from Product Overview page."""
+    @transaction.atomic
     def post(self, request, pk):
-        user = request.user
-        if user.role == 'ADMIN':
-            product = get_object_or_404(Product, pk=pk)
-        else:
-            product = get_object_or_404(Product, pk=pk, user=user)
-
+        product = get_object_or_404(Product, pk=pk, user=request.user)
         form = QuickAdjustPriceForm(request.POST, instance=product)
         if form.is_valid():
-            old_price = product.selling_price
             product = form.save()
             messages.success(
                 request,
@@ -421,7 +413,7 @@ class AdjustSellingPriceView(LoginRequiredMixin, View):
         return redirect(reverse('product_detail', kwargs={'pk': product.pk}))
 
 
-class SupplierComparisonView(LoginRequiredMixin, ListView):
+class SupplierComparisonView(LoginRequiredMixin, ResellerRequiredMixin, ListView):
     """
     Catalog-wide feature comparing purchasing prices across different suppliers.
     Allows resellers to see where each product is cheapest and find bulk savings.
@@ -431,12 +423,7 @@ class SupplierComparisonView(LoginRequiredMixin, ListView):
     context_object_name = "products"
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'ADMIN' and self.request.GET.get('view_all') == 'true':
-            qs = Product.objects.all().prefetch_related('price_records')
-        else:
-            qs = Product.objects.filter(user=user).prefetch_related('price_records')
-        return qs
+        return Product.objects.filter(user=self.request.user).prefetch_related('price_records')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
