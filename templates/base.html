@@ -152,22 +152,12 @@
                             {% if user.role == 'ADMIN' %}
                                 <li class="nav-item">
                                     <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}" href="{% url 'admin_dashboard' %}">
-                                        <i class="bi bi-shield-lock me-1"></i>Admin Dashboard
+                                        <i class="bi bi-people me-1"></i>Reseller Accounts
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'product_list' %}active{% endif %}" href="{% url 'product_list' %}?view_all=true">
-                                        <i class="bi bi-box-seam me-1"></i>All Products
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'compare_suppliers' %}active{% endif %}" href="{% url 'compare_suppliers' %}?view_all=true">
-                                        <i class="bi bi-shop me-1"></i>Compare Stores
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'price_history' %}active{% endif %}" href="{% url 'price_history' %}?view_all=true">
-                                        <i class="bi bi-clock-history me-1"></i>Price Logs
+                                    <a class="nav-link" href="/admin/" target="_blank">
+                                        <i class="bi bi-gear-fill me-1"></i>Django Admin Panel
                                     </a>
                                 </li>
                             {% else %}
@@ -182,11 +172,6 @@
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'compare_suppliers' %}active{% endif %}" href="{% url 'compare_suppliers' %}">
-                                        <i class="bi bi-shop me-1 text-teal"></i>Compare Stores
-                                    </a>
-                                </li>
-                                <li class="nav-item">
                                     <a class="nav-link {% if request.resolver_match.url_name == 'price_history' %}active{% endif %}" href="{% url 'price_history' %}">
                                         <i class="bi bi-clock-history me-1"></i>Purchase History
                                     </a>
@@ -196,9 +181,11 @@
 
                         <!-- User Profile Pill & Quick Actions -->
                         <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
-                            <a class="btn btn-sm btn-teal d-none d-md-inline-flex align-items-center gap-1" href="{% url 'product_create' %}">
-                                <i class="bi bi-plus-lg"></i> Add Product
-                            </a>
+                            {% if user.role != 'ADMIN' %}
+                                <a class="btn btn-sm btn-teal d-none d-md-inline-flex align-items-center gap-1" href="{% url 'product_create' %}">
+                                    <i class="bi bi-plus-lg"></i> Add Product
+                                </a>
+                            {% endif %}
 
                             <div class="user-pill">
                                 <i class="bi bi-shop text-teal"></i>
