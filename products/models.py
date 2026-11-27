@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_UP
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.utils import timezone
@@ -67,6 +68,23 @@ class Product(models.Model):
         ordering = ['name']
         verbose_name = "Product"
         verbose_name_plural = "Products"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'name'],
+                name='unique_product_name_per_user'
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.name:
+            self.name = self.name.strip()
+            if len(self.name) < 2:
+                raise ValidationError({'name': 'Product name must be at least 2 characters long.'})
+        if self.selling_price is not None and self.selling_price <= Decimal('0.00'):
+            raise ValidationError({'selling_price': 'Selling price must be greater than ₱0.00.'})
+        if self.margin_threshold is not None and (self.margin_threshold < Decimal('0.00') or self.margin_threshold > Decimal('100.00')):
+            raise ValidationError({'margin_threshold': 'Profit margin threshold must be between 0% and 100%.'})
 
     def __str__(self):
         return f"{self.name} ({self.get_category_display()})"
@@ -337,6 +355,17 @@ class PriceRecord(models.Model):
         ordering = ['-effective_date', '-created_at', '-id']
         verbose_name = "Price Record"
         verbose_name_plural = "Price Records"
+
+    def clean(self):
+        super().clean()
+        if self.purchase_price is not None and self.purchase_price <= Decimal('0.00'):
+            raise ValidationError({'purchase_price': 'Purchasing price must be greater than ₱0.00.'})
+        if self.quantity is not None and self.quantity < 1:
+            raise ValidationError({'quantity': 'Quantity must be at least 1 unit.'})
+        if self.effective_date:
+            today = timezone.localdate() if hasattr(timezone, 'localdate') else timezone.now().date()
+            if self.effective_date > today:
+                raise ValidationError({'effective_date': 'Purchase date cannot be in the future.'})
 
     def __str__(self):
         return f"{self.product.name} - ₱{self.purchase_price} ({self.effective_date})"
