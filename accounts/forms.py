@@ -36,7 +36,26 @@ class CustomUserCreationForm(UserCreationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Enforce that only one Admin can register: if one already exists, restrict to RESELLER
+        if CustomUser.objects.filter(role=CustomUser.Role.ADMIN).exists():
+            self.fields['role'].choices = [
+                (CustomUser.Role.RESELLER, 'Small Reseller')
+            ]
+            self.fields['role'].initial = CustomUser.Role.RESELLER
+            self.fields['role'].help_text = "Only 'Small Reseller' is available because an Administrator is already registered."
         add_bootstrap_classes(self)
+
+    def clean_role(self):
+        role = self.cleaned_data.get('role')
+        if role == CustomUser.Role.ADMIN:
+            existing_admin = CustomUser.objects.filter(role=CustomUser.Role.ADMIN)
+            if self.instance and self.instance.pk:
+                existing_admin = existing_admin.exclude(pk=self.instance.pk)
+            if existing_admin.exists():
+                raise forms.ValidationError(
+                    "An Administrator account already exists. Only one Administrator is permitted to register."
+                )
+        return role
 
     def clean_email(self):
         email = self.cleaned_data.get('email')

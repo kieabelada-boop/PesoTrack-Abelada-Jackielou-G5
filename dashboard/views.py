@@ -1,7 +1,6 @@
 from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count
 from django.shortcuts import render, redirect
 from accounts.models import CustomUser
 from products.models import Product, PriceRecord
@@ -60,6 +59,7 @@ def admin_dashboard(request):
     """
     Role-based dashboard for Administrators.
     Restricted to ADMIN role. Non-admins cannot open this view by typing its URL.
+    Monitors registered small resellers and store owners only.
     """
     if request.user.role != CustomUser.Role.ADMIN and not request.user.is_superuser:
         messages.error(request, "Access denied. Administrator privileges required to access this dashboard.")
@@ -67,22 +67,12 @@ def admin_dashboard(request):
 
     resellers = CustomUser.objects.filter(
         role=CustomUser.Role.RESELLER
-    ).annotate(product_count=Count('products')).order_by('-date_joined')
+    ).order_by('-date_joined')
 
     total_resellers = resellers.count()
-    total_admins = CustomUser.objects.filter(role=CustomUser.Role.ADMIN).count()
-    total_products = Product.objects.count()
-    total_price_records = PriceRecord.objects.count()
-
-    all_products = list(Product.objects.all())
-    system_low_margins = [p for p in all_products if p.is_low_margin]
 
     context = {
-        'resellers': resellers[:15],
+        'resellers': resellers,
         'total_resellers': total_resellers,
-        'total_admins': total_admins,
-        'total_products': total_products,
-        'total_price_records': total_price_records,
-        'system_low_margins_count': len(system_low_margins),
     }
     return render(request, 'dashboard/admin_dashboard.html', context)
