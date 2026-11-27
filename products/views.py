@@ -23,7 +23,7 @@ class ResellerRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect(f"{reverse('login')}?next={request.path}")
-        if request.user.role == 'ADMIN' and not request.user.is_superuser:
+        if request.user.role == 'ADMIN':
             messages.info(request, "Product inventory features are exclusive to small reseller accounts.")
             return redirect('admin_dashboard')
         return super().dispatch(request, *args, **kwargs)
